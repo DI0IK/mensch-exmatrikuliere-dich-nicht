@@ -521,7 +521,7 @@ export function proposeTrade(state: GameState, offer: TradeOffer): GameState {
   if (state.phase !== 'TURN_ACTION' && state.phase !== 'WAIT_ROLL') return state;
   if (offer.fromIndex !== state.currentTurn) return state;
   if (!validateTradeOffer(state, offer)) return state;
-  return { ...state, pendingTrade: offer, phase: 'TRADE_REVIEW' };
+  return { ...state, pendingTrade: offer, preTradePhase: state.phase, phase: 'TRADE_REVIEW' };
 }
 
 export function respondTrade(state: GameState, accept: boolean): GameState {
@@ -542,7 +542,8 @@ export function respondTrade(state: GameState, accept: boolean): GameState {
     return {
       ...state,
       pendingTrade: null,
-      phase: 'TURN_ACTION',
+      preTradePhase: undefined,
+      phase: state.preTradePhase ?? 'TURN_ACTION',
       logs: log.logs,
       nextLogId: log.nextLogId,
     };

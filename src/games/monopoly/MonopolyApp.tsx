@@ -184,14 +184,16 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
         />
       )}
 
-      <TradeModal
-        state={state}
-        language={language}
-        localSeatIndices={localSeatIndices}
-        isOpen={showTrade}
-        onAction={mp.dispatchAction}
-        onClose={() => setShowTrade(false)}
-      />
+      {(showTrade || state.phase === 'TRADE_REVIEW') && (
+        <TradeModal
+          state={state}
+          language={language}
+          localSeatIndices={localSeatIndices}
+          isOpen={showTrade}
+          onAction={mp.dispatchAction}
+          onClose={() => setShowTrade(false)}
+        />
+      )}
 
       {showConnectionInfo && (
         <ConnectionInfoModal

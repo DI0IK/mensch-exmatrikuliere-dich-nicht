@@ -147,6 +147,7 @@ export interface GameState {
   pendingTileIndex: number | null;
   drawnCard: DrawnCard | null;
   pendingTrade: TradeOffer | null;
+  preTradePhase?: 'WAIT_ROLL' | 'TURN_ACTION';
   auction: AuctionState | null;
   debtCreditorIndex: number | null;
   chanceDeck: string[];

@@ -42,7 +42,12 @@ export function validateTradeOffer(state: GameState, offer: TradeOffer): boolean
 
 export function executeTrade(state: GameState, offer: TradeOffer): GameState {
   if (!validateTradeOffer(state, offer)) {
-    return { ...state, phase: 'TURN_ACTION', pendingTrade: null };
+    return {
+      ...state,
+      phase: state.preTradePhase ?? 'TURN_ACTION',
+      pendingTrade: null,
+      preTradePhase: undefined,
+    };
   }
 
   const players = state.players.map((p) => ({ ...p }));
@@ -80,7 +85,8 @@ export function executeTrade(state: GameState, offer: TradeOffer): GameState {
     players,
     properties,
     pendingTrade: null,
-    phase: from.cash < 0 ? 'DEBT_RECOVERY' : 'TURN_ACTION',
+    preTradePhase: undefined,
+    phase: from.cash < 0 ? 'DEBT_RECOVERY' : (state.preTradePhase ?? 'TURN_ACTION'),
     logs: log.logs,
     nextLogId: log.nextLogId,
   };
