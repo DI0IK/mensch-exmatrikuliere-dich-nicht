@@ -5,11 +5,11 @@ import { decideBotAction } from '../game/bot';
 import { applyGameAction, createInitialState } from '../game/engine';
 import { DEFAULT_GAME_SETTINGS } from '../game/modes';
 import type { GameAction, GameSettings, GameState, PlayerConfig } from '../game/types';
+import { extractRoomCodeFromHash } from '../../../shared/net/joinLink';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../../../shared/net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
 import {
   DEFAULT_PLAYERS,
-  extractHashParam,
   isSeatAuthorizedForAction,
   loadSavedProfile,
   playTransitionSounds,
@@ -42,7 +42,7 @@ export function useMultiplayerGame() {
   const [hostLobbyError, setHostLobbyError] = useState<string | null>(null);
   const hostRoomRef = useRef<LobbyHostRoom<NetMessage> | null>(null);
 
-  const initialRoomCode = useMemo(() => extractHashParam('#room='), []);
+  const initialRoomCode = useMemo(() => extractRoomCodeFromHash(), []);
   const [isGuest, setIsGuest] = useState(Boolean(initialRoomCode));
   const [guestSeat, setGuestSeat] = useState<number | null>(null);
   const [guestName, setGuestName] = useState(() => loadSavedProfile().name || 'Online-Studi');

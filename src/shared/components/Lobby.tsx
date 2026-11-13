@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { buildJoinUrl, type GameId } from '../net/joinLink';
 import { SUPERPOWER_LIST, SUPERPOWER_META } from '../../games/medn/game/superpowers';
 import type { GameSettings, Language, PlayerConfig, SuperpowerType } from '../../games/medn/game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../../games/medn/i18n/translations';
@@ -47,6 +48,7 @@ interface LobbyProps {
   badgeOverride?: string;
   startLabelOverride?: string;
   customModeSelector?: React.ReactNode;
+  gameId?: GameId;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
@@ -84,6 +86,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   badgeOverride,
   startLabelOverride,
   customModeSelector,
+  gameId = 'medn',
 }) => {
   const t = TRANSLATIONS[language];
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
@@ -337,10 +340,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                             lineHeight: 1,
                           }}
                           onClick={() =>
-                            copyText(
-                              'lobby-url',
-                              `${window.location.origin}${window.location.pathname}#room=${hostLobbyCode}`
-                            )
+                            copyText('lobby-url', buildJoinUrl(hostLobbyCode, gameId))
                           }
                         >
                           {copiedKey === 'lobby-url' ? (

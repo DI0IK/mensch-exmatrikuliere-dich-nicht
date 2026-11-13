@@ -23,6 +23,7 @@ import type {
   PlayerConfig,
   SuperpowerType,
 } from '../game/types';
+import { extractRoomCodeFromHash } from '../../../shared/net/joinLink';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../../../shared/net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
 
@@ -76,12 +77,6 @@ const DEFAULT_PLAYERS: PlayerConfig[] = [
   { color: 'gelb', name: 'BWL-Justus', seatType: 'bot', active: true, major: 'BWL', emoji: '📈' },
   { color: 'gruen', name: 'Med-Klara', seatType: 'bot', active: true, major: 'Medizin', emoji: '🩺' },
 ];
-
-function extractHashParam(prefix: string): string {
-  if (typeof window === 'undefined') return '';
-  const hash = window.location.hash;
-  return hash.startsWith(prefix) ? hash.slice(prefix.length) : '';
-}
 
 function playTransitionSounds(prev: GameState | null, next: GameState): void {
   if (!prev) return;
@@ -166,7 +161,7 @@ export function useMultiplayerGame() {
   playersRef.current = players;
 
   // Guest P2P state
-  const [initialRoomCode] = useState<string>(() => extractHashParam('#room='));
+  const [initialRoomCode] = useState<string>(() => extractRoomCodeFromHash());
   const [guestName, setGuestName] = useState(() => loadSavedProfile().name ?? 'Gast-Studi');
   const guestNameRef = useRef(guestName);
   guestNameRef.current = guestName;

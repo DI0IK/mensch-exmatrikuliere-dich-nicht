@@ -82,6 +82,7 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
       <>
         {gameSwitcher}
         <SharedLobby
+        gameId="monopoly"
         language={language}
         players={mp.players}
         lobbyRoster={mp.lobbyRoster}

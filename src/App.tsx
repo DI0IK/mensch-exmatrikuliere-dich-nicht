@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { MednApp } from './games/medn/MednApp';
 import MonopolyApp from './games/monopoly/MonopolyApp';
-
-type ActiveGame = 'medn' | 'monopoly';
+import { extractGameFromHash, type GameId } from './shared/net/joinLink';
 
 export function App() {
-  const [activeGame, setActiveGame] = useState<ActiveGame>('medn');
+  const [activeGame, setActiveGame] = useState<GameId>(() => extractGameFromHash());
 
   const gameSwitcher = (
     <div
