@@ -1,32 +1,36 @@
-# React + TypeScript + Vite
+# Mensch exmatrikuliere dich nicht
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A university-themed, slightly modified version of *Mensch ärgere dich nicht* built with **React**, **TypeScript**, and **Vite** — featuring a tactile German tabletop aesthetic, smart bots, and pure frontend browser-to-browser multiplayer over **WebRTC**.
 
-Currently, two official plugins are available:
+## Rules & Twist
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Immatrikulation**: Roll a `6` to move a pawn out of your corner *Wohnheim* onto your start tile (grants a bonus roll).
+- **1v1 Exmatrikulations-Duell**: Landing on an opponent's pawn does not automatically kick them — instead, both players roll `1d6` in a 1v1 duel! Ties re-roll until someone wins; the loser is **exmatriculated** back to their *Wohnheim*, and the winner keeps the tile.
+- **Classic MÄDN Nuances**:
+  - Up to **3 attempts** to roll a `6` when all 4 pawns are in the *Wohnheim*.
+  - Must clear your own start tile first if pawns remain in the *Wohnheim*.
+  - Exact roll required to enter and advance in the 4-tile *Abschluss* goal stretch (first player with all 4 pawns in goal wins).
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **2–4 Players**: Play solo against bots, local pass-and-play, or mix in remote players.
+- **Serverless WebRTC P2P**: Connect browser-to-browser using compressed `#join=` invite links or copy-paste Offer/Answer codes (public STUN, no backend server required), with live Waiting Room sync and automatic Bot takeover if a guest leaves.
+- **Bilingual UI**: Switch between German (`DE`) and English (`EN`) anytime.
+- **Synthesized Tabletop Audio**: Web Audio API dice clatter, wooden pawn taps, and stamp effects with a mute toggle.
 
-## Expanding the Oxlint configuration
+## Local Development
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### Scripts
+
+- `npm run dev` — Start the Vite dev server
+- `npm test -- --run` — Run the Vitest unit test suite for the game engine and bot AI
+- `npm run build` — Type-check (`tsc -b`) and build production assets into `dist/`
+
+## Deployment (GitHub Pages)
+
+The included workflow at `.github/workflows/deploy.yml` runs tests, builds the app, and deploys `dist/` to GitHub Pages on pushes to `main`. In your repository's **Settings → Pages**, set **Source** to **GitHub Actions**.
