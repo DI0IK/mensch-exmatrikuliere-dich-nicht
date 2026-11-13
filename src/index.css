@@ -36,6 +36,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 125%;
+}
+
 html,
 body,
 #root {
@@ -226,7 +230,7 @@ select {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  max-width: 1320px;
+  max-width: 1560px;
   margin: 0 auto;
   padding: 10px 14px 18px;
   gap: 12px;
@@ -234,9 +238,9 @@ select {
 
 .game-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
+  grid-template-columns: minmax(0, 1fr) 400px;
   align-items: start;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
 }
 
@@ -248,7 +252,8 @@ select {
 }
 
 .board-frame {
-  width: min(calc(100dvh - 150px), calc(100vw - 360px), 680px);
+  width: min(100%, calc(100dvh - 150px));
+  max-width: 100%;
   aspect-ratio: 1 / 1;
   background: #fef17e;
   border: 0.4em solid #f40500;
@@ -261,26 +266,34 @@ select {
 }
 
 @media (max-width: 960px) {
+  html {
+    font-size: 106.25%;
+  }
+
   .game-workspace {
     grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .board-frame {
-    width: min(calc(100dvh - 230px), calc(100vw - 24px), 560px);
+    width: min(100%, calc(100dvh - 180px));
     padding: 6px;
     outline-offset: -6px;
   }
 }
 
 @media (max-width: 520px) {
+  html {
+    font-size: 100%;
+  }
+
   .app-shell {
     padding: 8px 8px 14px;
     gap: 8px;
   }
 
   .board-frame {
-    width: min(calc(100vw - 16px), 440px);
+    width: 100%;
   }
 }
 

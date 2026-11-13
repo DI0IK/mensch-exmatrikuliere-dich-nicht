@@ -287,17 +287,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   stroke="#000000"
                   strokeWidth="3.5"
                 />
-                <text
-                  x={x}
-                  y={y}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize="28"
-                  fontWeight="700"
-                  fill={COLOR_TEXT[color]}
-                >
-                  {slot + 1}
-                </text>
               </g>
             );
           })
