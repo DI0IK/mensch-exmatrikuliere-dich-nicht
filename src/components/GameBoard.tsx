@@ -17,17 +17,31 @@ interface GameBoardProps {
 }
 
 const COLOR_HEX: Record<PlayerColor, string> = {
-  rot: '#c93b2b',
-  blau: '#255c99',
-  gelb: '#d69618',
-  gruen: '#2b7a4b',
+  rot: '#e74c3c',
+  blau: '#3498db',
+  gruen: '#2ecc71',
+  gelb: '#f1c40f',
 };
 
-const COLOR_LIGHT: Record<PlayerColor, string> = {
-  rot: '#f5cbc6',
-  blau: '#c8ddf2',
-  gelb: '#f7e5bc',
-  gruen: '#c7e6d3',
+const COLOR_TEXT: Record<PlayerColor, string> = {
+  rot: '#ffffff',
+  blau: '#ffffff',
+  gruen: '#ffffff',
+  gelb: '#111111',
+};
+
+const BASE_LABEL: Record<PlayerColor, string> = {
+  rot: 'A',
+  blau: 'B',
+  gruen: 'C',
+  gelb: 'D',
+};
+
+const FACULTY_ICON: Record<PlayerColor, string> = {
+  rot: '💻',
+  blau: '⚖️',
+  gruen: '🩺',
+  gelb: '📈',
 };
 
 function cellCenter(coord: GridCoord): { x: number; y: number } {
@@ -49,14 +63,10 @@ function getPawnCoord(pawn: Pawn): GridCoord {
 
 export const GameBoard: React.FC<GameBoardProps> = ({
   state,
-  language,
+  language: _language,
   canInteract,
   onSelectPawn,
 }) => {
-  const trackPoints = TRACK_COORDS.map(cellCenter)
-    .map((p) => `${p.x},${p.y}`)
-    .join(' ');
-
   // Build lookup of start tiles
   const startTileColors = new Map<number, PlayerColor>();
   PLAYER_COLORS.forEach((c) => {
@@ -75,104 +85,107 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       >
         <defs>
           <filter id="pawn-shadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#231d17" floodOpacity="0.32" />
+            <feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#000000" floodOpacity="0.28" />
           </filter>
-          <radialGradient id="birch-sheen" cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#fcf7eb" />
-            <stop offset="100%" stopColor="#efe4cc" />
+          <radialGradient id="pawn-grad-rot" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#ff7675" />
+            <stop offset="100%" stopColor="#d63031" />
+          </radialGradient>
+          <radialGradient id="pawn-grad-blau" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#74b9ff" />
+            <stop offset="100%" stopColor="#0984e3" />
+          </radialGradient>
+          <radialGradient id="pawn-grad-gruen" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#55efc4" />
+            <stop offset="100%" stopColor="#00b894" />
+          </radialGradient>
+          <radialGradient id="pawn-grad-gelb" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#ffeaa7" />
+            <stop offset="100%" stopColor="#fdcb6e" />
           </radialGradient>
         </defs>
 
-        {/* Board Surface */}
-        <rect x="0" y="0" width="1100" height="1100" rx="28" fill="url(#birch-sheen)" />
+        {/* Classic Yellow Board Surface */}
+        <rect x="0" y="0" width="1100" height="1100" fill="#fef17e" />
 
-        {/* Subtle Corner Wohnheim Frames */}
-        {[
-          { color: 'rot' as PlayerColor, x: 4, y: 4, label: language === 'de' ? 'WOHNHEIM' : 'DORM' },
-          { color: 'blau' as PlayerColor, x: 904, y: 4, label: language === 'de' ? 'WOHNHEIM' : 'DORM' },
-          { color: 'gelb' as PlayerColor, x: 904, y: 904, label: language === 'de' ? 'WOHNHEIM' : 'DORM' },
-          { color: 'gruen' as PlayerColor, x: 4, y: 904, label: language === 'de' ? 'WOHNHEIM' : 'DORM' },
-        ].map(({ color, x, y, label }) => (
-          <g key={`dorm-${color}`}>
-            <rect
-              x={x}
-              y={y}
-              width="192"
-              height="192"
-              rx="22"
-              fill={COLOR_LIGHT[color]}
-              fillOpacity="0.48"
-              stroke={COLOR_HEX[color]}
-              strokeWidth="3"
-              strokeDasharray="8 6"
-            />
-            <text
-              x={x + 96}
-              y={y < 500 ? y + 214 : y - 10}
-              textAnchor="middle"
-              fontSize="16"
-              fontWeight="700"
-              fontFamily="var(--font-stamp)"
-              letterSpacing="2"
-              fill={COLOR_HEX[color]}
-              opacity="0.85"
-            >
-              {label}
-            </text>
-          </g>
-        ))}
+        {/* University Corner Headings */}
+        <text
+          x="200"
+          y="300"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="48"
+          fontFamily="'KuenstlerScript', Georgia, serif"
+          fill="#333333"
+          pointerEvents="none"
+        >
+          Mensch
+        </text>
+        <text
+          x="900"
+          y="300"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="44"
+          fontFamily="'KuenstlerScript', Georgia, serif"
+          fill="#333333"
+          pointerEvents="none"
+        >
+          exmatrikuliere
+        </text>
+        <text
+          x="200"
+          y="800"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="48"
+          fontFamily="'KuenstlerScript', Georgia, serif"
+          fill="#333333"
+          pointerEvents="none"
+        >
+          dich
+        </text>
+        <text
+          x="900"
+          y="800"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="48"
+          fontFamily="'KuenstlerScript', Georgia, serif"
+          fill="#333333"
+          pointerEvents="none"
+        >
+          nicht
+        </text>
 
-        {/* Connecting Ink Path */}
-        <polygon
-          points={trackPoints}
-          fill="none"
-          stroke="#231d17"
-          strokeWidth="5"
-          strokeLinejoin="round"
-          opacity="0.72"
-        />
-
-        {/* Goal Connector Lines */}
-        {PLAYER_COLORS.map((color) => {
-          const pts = GOAL_COORDS_BY_COLOR[color].map(cellCenter);
-          return (
-            <line
-              key={`goal-line-${color}`}
-              x1={pts[0].x}
-              y1={pts[0].y}
-              x2={pts[3].x}
-              y2={pts[3].y}
-              stroke={COLOR_HEX[color]}
-              strokeWidth="6"
-              strokeLinecap="round"
-              opacity="0.45"
-            />
-          );
-        })}
-
-        {/* Center University Crest */}
+        {/* Center University Seal (Row 6, Col 6) */}
         <g transform="translate(550, 550)">
-          <circle r="48" fill="#fbf7ee" stroke="#231d17" strokeWidth="4" />
-          <circle r="40" fill="none" stroke="#c93b2b" strokeWidth="2" strokeDasharray="4 3" />
+          <title>Exmatrikulationsamt / Uni-Zentrum</title>
+          <circle
+            r="46"
+            fill="rgba(255, 255, 255, 0.4)"
+            stroke="#bdc3c7"
+            strokeWidth="3"
+            strokeDasharray="6 4"
+          />
           <text
-            y="-4"
+            y="-6"
             textAnchor="middle"
-            fontSize="21"
-            fontWeight="800"
-            fontFamily="var(--font-display)"
-            fill="#231d17"
+            dominantBaseline="central"
+            fontSize="36"
           >
-            UNI
+            🏛️
           </text>
           <text
-            y="18"
+            y="24"
             textAnchor="middle"
-            fontSize="11"
-            fontWeight="700"
-            fontFamily="var(--font-stamp)"
-            fill="#c93b2b"
+            dominantBaseline="central"
+            fontSize="12"
+            fontWeight="800"
+            letterSpacing="0.8"
+            fill="#7f8c8d"
           >
-            ECTS
+            CAMPUS
           </text>
         </g>
 
@@ -187,27 +200,39 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <circle
                 cx={x}
                 cy={y}
-                r={startColor ? 36 : 32}
-                fill={startColor ? COLOR_HEX[startColor] : '#fffdf7'}
-                stroke="#231d17"
-                strokeWidth="4"
+                r="41"
+                fill={startColor ? COLOR_HEX[startColor] : '#d3d3d3'}
+                stroke="#000000"
+                strokeWidth="3.5"
               />
               {startColor && (
-                <circle
-                  cx={x}
-                  cy={y}
-                  r="24"
-                  fill="none"
-                  stroke="#fffdf7"
-                  strokeWidth="2.5"
-                  strokeDasharray="5 4"
-                />
+                <>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r="35.5"
+                    fill="none"
+                    stroke="#111111"
+                    strokeWidth="4"
+                  />
+                  <text
+                    x={x}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="28"
+                    fontWeight="700"
+                    fill={COLOR_TEXT[startColor]}
+                  >
+                    S
+                  </text>
+                </>
               )}
               {isContested && (
                 <circle
                   cx={x}
                   cy={y}
-                  r="43"
+                  r="48"
                   fill="none"
                   stroke="#b72b22"
                   strokeWidth="5"
@@ -223,15 +248,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           BASE_COORDS_BY_COLOR[color].map((coord, slot) => {
             const { x, y } = cellCenter(coord);
             return (
-              <circle
-                key={`base-${color}-${slot}`}
-                cx={x}
-                cy={y}
-                r="32"
-                fill={COLOR_LIGHT[color]}
-                stroke={COLOR_HEX[color]}
-                strokeWidth="4"
-              />
+              <g key={`base-${color}-${slot}`}>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="41"
+                  fill={COLOR_HEX[color]}
+                  stroke="#000000"
+                  strokeWidth="3.5"
+                />
+                <text
+                  x={x}
+                  y={y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="28"
+                  fontWeight="700"
+                  fill={COLOR_TEXT[color]}
+                >
+                  {BASE_LABEL[color]}
+                </text>
+              </g>
             );
           })
         )}
@@ -241,24 +278,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           GOAL_COORDS_BY_COLOR[color].map((coord, slot) => {
             const { x, y } = cellCenter(coord);
             return (
-              <g key={`goal-${color}-${slot}`}>
+              <g key={`goal-${color}-${slot}`} opacity="0.9">
                 <circle
                   cx={x}
                   cy={y}
-                  r="30"
-                  fill={COLOR_LIGHT[color]}
-                  stroke={COLOR_HEX[color]}
-                  strokeWidth="4"
+                  r="41"
+                  fill={COLOR_HEX[color]}
+                  stroke="#000000"
+                  strokeWidth="3.5"
                 />
                 <text
                   x={x}
-                  y={y + 6}
+                  y={y}
                   textAnchor="middle"
-                  fontSize="18"
+                  dominantBaseline="central"
+                  fontSize="28"
                   fontWeight="700"
-                  fontFamily="var(--font-stamp)"
-                  fill={COLOR_HEX[color]}
-                  opacity="0.7"
+                  fill={COLOR_TEXT[color]}
                 >
                   {slot + 1}
                 </text>
@@ -290,6 +326,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             }
           }
 
+          const player = state.players[pawn.playerIndex];
+          const pawnEmoji = player?.emoji?.trim() || FACULTY_ICON[pawn.color];
+          const pawnTitle = player
+            ? player.major?.trim()
+              ? `${player.name} (${player.major.trim()})`
+              : player.name
+            : pawn.color;
+
           return (
             <g
               key={pawn.id}
@@ -310,52 +354,28 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 }
               }}
             >
-              {isLegal && (
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="36"
-                  fill="none"
-                  stroke="#231d17"
-                  strokeWidth="4"
-                  strokeDasharray="7 5"
-                  style={{
-                    animation: 'pawnPulse 1.1s ease-in-out infinite',
-                  }}
-                />
-              )}
-
-              {/* Physical Wooden Pawn Silhouette */}
-              <g filter="url(#pawn-shadow)">
-                {/* Pawn Base */}
-                <ellipse
-                  cx="0"
-                  cy="14"
-                  rx="21"
-                  ry="12"
-                  fill={COLOR_HEX[pawn.color]}
-                  stroke="#231d17"
-                  strokeWidth="3.5"
-                />
-                {/* Pawn Body */}
-                <path
-                  d="M -14 12 C -12 -4, -7 -12, -5 -16 L 5 -16 C 7 -12, 12 -4, 14 12 Z"
-                  fill={COLOR_HEX[pawn.color]}
-                  stroke="#231d17"
-                  strokeWidth="3.5"
-                  strokeLinejoin="round"
-                />
-                {/* Pawn Head */}
-                <circle
-                  cx="0"
-                  cy="-18"
-                  r="13"
-                  fill={COLOR_HEX[pawn.color]}
-                  stroke="#231d17"
-                  strokeWidth="3.5"
-                />
-                {/* Glossy highlight */}
-                <circle cx="-4" cy="-22" r="4" fill="#ffffff" opacity="0.45" />
+              <title>{pawnTitle}</title>
+              <g className={isLegal ? 'board-pawn--movable' : undefined}>
+                <g className="board-pawn-token" filter="url(#pawn-shadow)">
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="33"
+                    fill={`url(#pawn-grad-${pawn.color})`}
+                    stroke="#1e293b"
+                    strokeWidth="4"
+                  />
+                  <text
+                    x="0"
+                    y="1"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="26"
+                    pointerEvents="none"
+                  >
+                    {pawnEmoji}
+                  </text>
+                </g>
               </g>
             </g>
           );

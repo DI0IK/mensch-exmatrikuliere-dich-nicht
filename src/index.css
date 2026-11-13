@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'KuenstlerScript';
+  src: url('./assets/fonts/KuenstlerScript-Black.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --desk-bg: #e7dcc8;
   --desk-accent: #d8c9ae;
@@ -190,6 +197,30 @@ select {
   }
 }
 
+@keyframes pieceBounce {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.95));
+  }
+  50% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 14px rgba(255, 215, 0, 1));
+  }
+}
+
+.board-pawn-token {
+  transition: transform 0.15s ease;
+}
+
+.board-pawn--movable {
+  animation: pieceBounce 1.2s infinite ease-in-out;
+}
+
+.board-pawn--movable:hover .board-pawn-token {
+  transform: scale(1.14);
+}
+
 /* App Shell Layout */
 .app-shell {
   display: flex;
@@ -219,13 +250,13 @@ select {
 .board-frame {
   width: min(calc(100dvh - 150px), calc(100vw - 360px), 680px);
   aspect-ratio: 1 / 1;
-  background: var(--board-birch);
-  border: 3px solid var(--ink);
-  border-radius: 22px;
+  background: #fef17e;
+  border: 0.4em solid #f40500;
+  outline: 0.1em solid #000000;
+  outline-offset: -10px;
+  border-radius: 0;
   padding: 10px;
-  box-shadow:
-    0 10px 28px rgba(35, 29, 23, 0.18),
-    inset 0 0 0 4px var(--board-edge);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   position: relative;
 }
 
@@ -238,7 +269,7 @@ select {
   .board-frame {
     width: min(calc(100dvh - 230px), calc(100vw - 24px), 560px);
     padding: 6px;
-    border-radius: 16px;
+    outline-offset: -6px;
   }
 }
 

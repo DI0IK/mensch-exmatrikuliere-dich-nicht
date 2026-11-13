@@ -35,6 +35,7 @@ interface LobbyProps {
   onGuestLeave: () => void;
 }
 
+
 export const Lobby: React.FC<LobbyProps> = ({
   language,
   players,

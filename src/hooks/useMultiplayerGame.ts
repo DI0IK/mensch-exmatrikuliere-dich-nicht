@@ -14,10 +14,10 @@ import { LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
 import { WebRTCGuestClient, WebRTCHostManager, type NetMessage } from '../net/webrtc';
 
 const DEFAULT_PLAYERS: PlayerConfig[] = [
-  { color: 'rot', name: 'Studi 1', seatType: 'human-local', active: true },
-  { color: 'blau', name: 'BWL-Justus', seatType: 'bot', active: true },
-  { color: 'gelb', name: 'Info-Klara', seatType: 'bot', active: true },
-  { color: 'gruen', name: 'Jura-Leo', seatType: 'bot', active: true },
+  { color: 'rot', name: 'Studi 1', seatType: 'human-local', active: true, major: 'Informatik', emoji: '💻' },
+  { color: 'blau', name: 'Jura-Leo', seatType: 'bot', active: true, major: 'Jura', emoji: '⚖️' },
+  { color: 'gelb', name: 'BWL-Justus', seatType: 'bot', active: true, major: 'BWL', emoji: '📈' },
+  { color: 'gruen', name: 'Med-Klara', seatType: 'bot', active: true, major: 'Medizin', emoji: '🩺' },
 ];
 
 function extractHashParam(prefix: string): string {

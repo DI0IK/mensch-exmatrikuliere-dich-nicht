@@ -150,9 +150,11 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
                     color: 'var(--ink)',
                   }}
                 >
+                  {player.emoji ? `${player.emoji} ` : ''}
                   {player.name}
                 </div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--ink-muted)' }}>
+                  {player.major?.trim() ? `${player.major.trim()} · ` : ''}
                   {COLOR_LABELS[language][player.color]} ·{' '}
                   {player.seatType === 'bot'
                     ? 'Bot'
