@@ -315,8 +315,13 @@ export function acknowledgeActivity(state: GameState, rng: RngFn = Math.random):
   if (state.phase !== 'ACTIVITY_RESULT' || !state.activity) return state;
 
   const act = state.activity;
-  const turnOwner = state.turnOwnerAfterQueue ?? act.playerIndex;
-  const turnHadSix = state.turnHadSixAfterQueue ?? (act.hadSix || act.bonusRoll);
+  const hasBonusRoll = act.bonusRoll && !act.skipTurn && !act.exmatriculateAll;
+  const turnOwner = hasBonusRoll
+    ? act.playerIndex
+    : (state.turnOwnerAfterQueue ?? act.playerIndex);
+  const turnHadSix = hasBonusRoll
+    ? true
+    : (state.turnHadSixAfterQueue ?? act.hadSix);
 
   if (act.winGame || allPawnsInGoal(state.pawns, act.playerIndex)) {
     const winLog = addLog(state, { type: 'win', playerIndex: act.playerIndex });
@@ -351,7 +356,10 @@ export function acknowledgeActivity(state: GameState, rng: RngFn = Math.random):
     }
   }
 
-  const queuedNext = processNextQueuedEvent(state, rng);
+  const queuedNext = processNextQueuedEvent(
+    { ...state, turnOwnerAfterQueue: turnOwner, turnHadSixAfterQueue: turnHadSix },
+    rng
+  );
   if (queuedNext) return queuedNext;
 
   if (turnHadSix && !act.skipTurn && !act.exmatriculateAll) {

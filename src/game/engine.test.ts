@@ -419,4 +419,38 @@ describe('Mensch exmatrikuliere dich nicht - Game Engine', () => {
     expect(state.phase).toBe('DUEL_RESULT');
     expect(state.duel?.winner).toBe('defender');
   });
+
+  it('grants bonus roll to the player pushed onto a Bib/Party tile in push duel', () => {
+    // Track index 14 is 'bib' (good = bonusRoll: true).
+    // Blau (seat 1) starts at track index 17; Rot (seat 0) moves from 15 to 17 and wins 3:1 in push duel ->
+    // Blau is pushed -3 from 17 to 14 ('bib') and gets good outcome (rng < 0.5).
+    let state = createInitialState(twoPlayers(), { hardcore: true, duelMode: 'push' });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 15 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 17 } };
+        return p;
+      }),
+    };
+
+    state = rollDice(state, seqRng([2]));
+    state = selectPawn(state, 'rot-0');
+    expect(state.phase).toBe('DUEL_ROLL');
+
+    state = resolveDuelRoll(state, seqRng([3, 1]));
+    expect(state.phase).toBe('DUEL_RESULT');
+
+    // Acknowledge duel with rng=0.1 -> triggers 'bib' good outcome (bonusRoll: true) for Blau (seat 1)
+    state = acknowledgeDuel(state, () => 0.1);
+    expect(state.phase).toBe('ACTIVITY_RESULT');
+    expect(state.activity?.playerIndex).toBe(1);
+    expect(state.activity?.type).toBe('bib');
+    expect(state.activity?.bonusRoll).toBe(true);
+
+    // Acknowledging the activity must give the bonus roll to Blau (seat 1), not Rot (seat 0)!
+    state = acknowledgeActivity(state);
+    expect(state.phase).toBe('WAIT_ROLL');
+    expect(state.currentTurn).toBe(1);
+  });
 });
