@@ -22,6 +22,8 @@ export interface PlayerConfig {
   name: string;
   seatType: SeatType;
   active: boolean; // false if 2 or 3 player game and seat is unused
+  major?: string;
+  emoji?: string;
 }
 
 export type TurnPhase =

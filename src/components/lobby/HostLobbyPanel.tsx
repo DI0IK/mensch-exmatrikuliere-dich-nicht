@@ -1,7 +1,47 @@
 import React, { useState } from 'react';
-import type { Language, PlayerConfig, SeatType } from '../../game/types';
+import type { Language, PlayerColor, PlayerConfig, SeatType } from '../../game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../../i18n/translations';
 import { ALL_DEFAULT_NAMES, COLOR_HEX, DEFAULT_NAMES, type RemoteSlotUI } from './types';
+
+const DEFAULT_EMOJI: Record<PlayerColor, string> = {
+  rot: '💻',
+  blau: '⚖️',
+  gelb: '📈',
+  gruen: '🩺',
+};
+
+const MAJOR_SUGGESTIONS: Record<Language, string[]> = {
+  de: [
+    'Informatik',
+    'Jura',
+    'BWL',
+    'Medizin',
+    'Maschinenbau',
+    'Psychologie',
+    'Physik',
+    'Mathematik',
+    'Architektur',
+    'Lehramt',
+    'Biologie',
+    'Kunst',
+  ],
+  en: [
+    'Computer Science',
+    'Law',
+    'Business',
+    'Medicine',
+    'Mechanical Engineering',
+    'Psychology',
+    'Physics',
+    'Mathematics',
+    'Architecture',
+    'Education',
+    'Biology',
+    'Fine Arts',
+  ],
+};
+
+const EMOJI_PRESETS = ['🎓', '💻', '⚖️', '📈', '🩺', '⚙️', '🧠', '🔬', '📐', '🎨', '📚', '☕', '🍺', '🦉', '🚀', '⚡'];
 
 interface HostLobbyPanelProps {
   language: Language;
@@ -36,6 +76,7 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
 }) => {
   const t = TRANSLATIONS[language];
   const [showManualHost, setShowManualHost] = useState(false);
+  const [openEmojiSeat, setOpenEmojiSeat] = useState<number | null>(null);
 
   const activeCount = players.filter((p) => p.active).length;
   const hasJoinableSeats = players.some(
@@ -127,6 +168,11 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
       )}
 
       <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{t.players}</div>
+      <datalist id="study-major-suggestions">
+        {MAJOR_SUGGESTIONS[language].map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {players.map((player, idx) => {
           const remote = remoteSlots[idx];
@@ -214,6 +260,118 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
                   }}
                 />
               </div>
+
+              {/* Study Major & Custom Emoji Picker */}
+              {player.active && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      paddingLeft: '28px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      list="study-major-suggestions"
+                      value={player.major ?? ''}
+                      maxLength={28}
+                      placeholder={language === 'de' ? 'Studiengang (z. B. Informatik)…' : 'Field of study (e.g. CS)…'}
+                      aria-label={language === 'de' ? 'Studiengang' : 'Field of study'}
+                      onChange={(e) => updateSeat(idx, { major: e.target.value })}
+                      style={{
+                        flex: '1 1 180px',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #cbbba0',
+                        background: '#fff',
+                        fontSize: '0.84rem',
+                        minWidth: 0,
+                      }}
+                    />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="text"
+                        value={player.emoji ?? DEFAULT_EMOJI[player.color]}
+                        maxLength={8}
+                        aria-label={language === 'de' ? 'Spielfigur-Emoji' : 'Pawn emoji'}
+                        title={language === 'de' ? 'Eigenes Emoji eingeben oder rechts auswählen' : 'Type any emoji or pick one'}
+                        onChange={(e) => updateSeat(idx, { emoji: e.target.value })}
+                        style={{
+                          width: '48px',
+                          textAlign: 'center',
+                          padding: '5px 4px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbbba0',
+                          background: '#fff',
+                          fontSize: '1.1rem',
+                          lineHeight: 1.2,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="tactile-btn"
+                        onClick={() => setOpenEmojiSeat(openEmojiSeat === idx ? null : idx)}
+                        aria-label={language === 'de' ? 'Emoji auswählen' : 'Choose emoji'}
+                        title={language === 'de' ? 'Emoji auswählen' : 'Choose emoji'}
+                        style={{
+                          padding: '5px 8px',
+                          fontSize: '0.78rem',
+                          boxShadow: '0 2px 0 var(--ink)',
+                        }}
+                      >
+                        {openEmojiSeat === idx ? '▴' : '▾'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {openEmojiSeat === idx && (
+                    <div
+                      style={{
+                        marginLeft: '28px',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #cbbba0',
+                        background: '#fbf7ee',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                      }}
+                    >
+                      {EMOJI_PRESETS.map((em) => {
+                        const isSelected = (player.emoji ?? DEFAULT_EMOJI[player.color]) === em;
+                        return (
+                          <button
+                            key={em}
+                            type="button"
+                            onClick={() => {
+                              updateSeat(idx, { emoji: em });
+                              setOpenEmojiSeat(null);
+                            }}
+                            style={{
+                              width: '34px',
+                              height: '34px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1.15rem',
+                              borderRadius: '8px',
+                              border: isSelected ? `2px solid ${COLOR_HEX[player.color]}` : '1px solid #d5c6ae',
+                              background: isSelected ? '#fff' : '#fffdf7',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {em}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {player.active && player.seatType === 'human-remote' && (
                 <div
