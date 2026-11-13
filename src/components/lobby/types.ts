@@ -1,13 +1,5 @@
 import type { Language, PlayerColor, SeatType } from '../../game/types';
 
-export interface RemoteSlotUI {
-  offerCode: string;
-  answerInput: string;
-  connected: boolean;
-  creating: boolean;
-  error: string | null;
-}
-
 export const DEFAULT_NAMES: Record<SeatType, string[]> = {
   'human-local': ['Studi 1', 'Studi 2', 'Studi 3', 'Studi 4'],
   'human-remote': ['Online-Studi 1', 'Online-Studi 2', 'Online-Studi 3', 'Online-Studi 4'],

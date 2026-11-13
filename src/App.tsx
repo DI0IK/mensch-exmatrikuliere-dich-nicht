@@ -77,15 +77,15 @@ export function App() {
         language={language}
         players={game.players}
         lobbyRoster={game.lobbyRoster}
-        remoteSlots={game.remoteSlots}
+        connectedSeats={game.connectedSeats}
         hostLobbyCode={game.hostLobbyCode}
         hostLobbyError={game.hostLobbyError}
-        initialJoinCode={game.initialJoinCode}
         initialRoomCode={game.initialRoomCode}
+        isGuest={game.isGuest}
+        guestSeat={game.guestSeat}
         guestName={game.guestName}
         guestMajor={game.guestMajor}
         guestEmoji={game.guestEmoji}
-        guestAnswerCode={game.guestAnswerCode}
         guestConnected={game.guestConnected}
         guestConnecting={game.guestConnecting}
         guestError={game.guestError}
@@ -94,20 +94,13 @@ export function App() {
         onChangeGuestMajor={game.updateGuestMajor}
         onChangeGuestEmoji={game.updateGuestEmoji}
         onToggleLanguage={() => setLanguage((l) => (l === 'de' ? 'en' : 'de'))}
-        onCreateOffer={(idx) => void game.handleCreateOffer(idx)}
-        onAcceptAnswer={(idx, code) => void game.handleAcceptAnswer(idx, code)}
-        onUpdateAnswerInput={game.updateAnswerInput}
         onCloseRemoteSeat={game.handleCloseRemoteSeat}
         onStartGame={game.handleStartGame}
         onGuestJoinRoom={game.handleGuestJoinRoom}
-        onGuestCreateAnswer={(code) => void game.handleGuestCreateAnswer(code)}
         onGuestLeave={game.handleGuestLeave}
       />
     );
   }
-
-  const canLocalActFinal = canLocalAct;
-  const canRollFinal = canRoll;
 
   return (
     <div className="app-shell">
@@ -122,7 +115,7 @@ export function App() {
           <GameBoard
             state={state}
             language={language}
-            canInteract={canLocalActFinal}
+            canInteract={canLocalAct}
             onSelectPawn={(pawnId) =>
               game.dispatchAction({
                 type: 'SELECT_PAWN',
@@ -136,16 +129,19 @@ export function App() {
         <ActionDock
           state={state}
           language={language}
-          canRoll={canRollFinal}
+          canRoll={canRoll}
           rolling={rollingAnim}
           muted={muted}
           isGuest={game.isGuest}
+          hostLobbyCode={game.hostLobbyCode}
+          connectedSeats={game.connectedSeats}
           disconnectedSeats={game.disconnectedSeats}
           onRoll={triggerRoll}
           onToggleLanguage={() => setLanguage((l) => (l === 'de' ? 'en' : 'de'))}
           onToggleMute={handleToggleMute}
           onBackToLobby={game.handleBackToLobby}
           onTakeOverAsBot={game.handleTakeOverAsBot}
+          getConnectionTransports={game.getConnectionTransports}
         />
       </main>
 

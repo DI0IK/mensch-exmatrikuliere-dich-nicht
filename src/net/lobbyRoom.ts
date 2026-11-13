@@ -2,6 +2,52 @@ import Peer, { type DataConnection } from 'peerjs';
 import { getIceServers } from './iceConfig';
 import type { NetMessage } from './webrtc';
 
+export type IceTransportKind = 'local' | 'stun' | 'turn';
+
+async function readIceTransportKind(conn: DataConnection | null | undefined): Promise<IceTransportKind | null> {
+  const pc = conn?.peerConnection;
+  if (!pc || typeof pc.getStats !== 'function') return null;
+
+  try {
+    const stats = await pc.getStats();
+    let selectedPairId: string | undefined;
+    let fallbackPair: { localCandidateId?: string; remoteCandidateId?: string } | null = null;
+    const pairs = new Map<string, { localCandidateId?: string; remoteCandidateId?: string }>();
+    const candidates = new Map<string, string>();
+
+    stats.forEach((report) => {
+      if (report.type === 'transport' && report.selectedCandidatePairId) {
+        selectedPairId = report.selectedCandidatePairId as string;
+      } else if (report.type === 'candidate-pair') {
+        pairs.set(report.id, report);
+        if (report.state === 'succeeded' && report.nominated) {
+          fallbackPair = report;
+        }
+      } else if (
+        (report.type === 'local-candidate' || report.type === 'remote-candidate') &&
+        typeof report.candidateType === 'string'
+      ) {
+        candidates.set(report.id, report.candidateType);
+      }
+    });
+
+    const activePair = (selectedPairId ? pairs.get(selectedPairId) : null) ?? fallbackPair;
+    if (!activePair) return null;
+
+    const localType = activePair.localCandidateId ? candidates.get(activePair.localCandidateId) : undefined;
+    const remoteType = activePair.remoteCandidateId ? candidates.get(activePair.remoteCandidateId) : undefined;
+
+    if (localType === 'relay' || remoteType === 'relay') return 'turn';
+    if (localType === 'srflx' || localType === 'prflx' || remoteType === 'srflx' || remoteType === 'prflx') {
+      return 'stun';
+    }
+    if (localType === 'host' || remoteType === 'host') return 'local';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function generateLobbyCode(length = 6): string {
@@ -122,6 +168,19 @@ export class LobbyHostRoom {
     }
   }
 
+  public async getSeatTransportKinds(): Promise<Record<number, IceTransportKind>> {
+    const result: Record<number, IceTransportKind> = {};
+    for (const [seatIndex, conn] of this.seatConns.entries()) {
+      if (conn.open) {
+        const kind = await readIceTransportKind(conn);
+        if (kind) {
+          result[seatIndex] = kind;
+        }
+      }
+    }
+    return result;
+  }
+
   public closeAll(): void {
     for (const conn of this.seatConns.values()) {
       conn.close();
@@ -194,6 +253,11 @@ export class LobbyGuestRoom {
     if (this.conn && this.conn.open) {
       this.conn.send(msg);
     }
+  }
+
+  public async getTransportKind(): Promise<IceTransportKind | null> {
+    if (!this.conn || !this.conn.open) return null;
+    return readIceTransportKind(this.conn);
   }
 
   public close(): void {

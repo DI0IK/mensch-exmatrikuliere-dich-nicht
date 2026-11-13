@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sound } from '../audio/sound';
-import { DEFAULT_NAMES, type RemoteSlotUI } from '../components/lobby/types';
+import { DEFAULT_NAMES } from '../components/lobby/types';
 import { chooseBestBotPawn } from '../game/bot';
 import {
   acknowledgeDuel,
@@ -10,8 +10,8 @@ import {
   selectPawn,
 } from '../game/engine';
 import type { GameAction, GameState, PlayerConfig } from '../game/types';
-import { LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
-import { WebRTCGuestClient, WebRTCHostManager, type NetMessage } from '../net/webrtc';
+import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
+import type { NetMessage } from '../net/webrtc';
 
 const DEFAULT_PLAYERS: PlayerConfig[] = [
   { color: 'rot', name: 'Studi 1', seatType: 'human-local', active: true, major: 'Informatik', emoji: '💻' },
@@ -71,18 +71,16 @@ export function useMultiplayerGame() {
   const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
   const [gameState, setGameState] = useState<GameState | null>(null);
 
-  // WebRTC Host state
-  const [remoteSlots, setRemoteSlots] = useState<Record<number, RemoteSlotUI>>({});
+  // Host P2P state
+  const [connectedSeats, setConnectedSeats] = useState<number[]>([]);
   const [disconnectedSeats, setDisconnectedSeats] = useState<number[]>([]);
   const [hostLobbyCode, setHostLobbyCode] = useState<string | null>(null);
   const [hostLobbyError, setHostLobbyError] = useState<string | null>(null);
-  const hostManagerRef = useRef<WebRTCHostManager | null>(null);
   const lobbyHostRef = useRef<LobbyHostRoom | null>(null);
   const playersRef = useRef<PlayerConfig[]>(players);
   playersRef.current = players;
 
-  // WebRTC Guest state
-  const [initialJoinCode] = useState<string>(() => extractHashParam('#join='));
+  // Guest P2P state
   const [initialRoomCode] = useState<string>(() => extractHashParam('#room='));
   const [guestName, setGuestName] = useState('Gast-Studi');
   const guestNameRef = useRef(guestName);
@@ -93,13 +91,11 @@ export function useMultiplayerGame() {
   const [guestEmoji, setGuestEmoji] = useState('');
   const guestEmojiRef = useRef(guestEmoji);
   guestEmojiRef.current = guestEmoji;
-  const [guestAnswerCode, setGuestAnswerCode] = useState('');
   const [guestConnected, setGuestConnected] = useState(false);
   const [guestConnecting, setGuestConnecting] = useState(false);
   const [guestError, setGuestError] = useState<string | null>(null);
   const [guestSeat, setGuestSeat] = useState<number | null>(null);
   const [lobbyRoster, setLobbyRoster] = useState<PlayerConfig[] | null>(null);
-  const guestClientRef = useRef<WebRTCGuestClient | null>(null);
   const lobbyGuestRef = useRef<LobbyGuestRoom | null>(null);
 
   const isGuest = guestSeat !== null;
@@ -107,7 +103,6 @@ export function useMultiplayerGame() {
   gameStateRef.current = gameState;
 
   const broadcastAll = useCallback((msg: NetMessage) => {
-    hostManagerRef.current?.broadcast(msg);
     lobbyHostRef.current?.broadcast(msg);
   }, []);
 
@@ -223,13 +218,8 @@ export function useMultiplayerGame() {
           return next;
         });
       } else if (msg.kind === 'LEAVE_GAME') {
-        hostManagerRef.current?.closeSeat(seatIndex);
         lobbyHostRef.current?.closeSeat(seatIndex);
-        setRemoteSlots((prev) => {
-          const next = { ...prev };
-          delete next[seatIndex];
-          return next;
-        });
+        setConnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
         setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
         setPlayers((prev) => {
           const nextPlayers = prev.map((p, i) =>
@@ -258,18 +248,14 @@ export function useMultiplayerGame() {
 
   const handleHostStatusChange = useCallback(
     (seatIndex: number, connected: boolean) => {
-      setRemoteSlots((prev) => ({
-        ...prev,
-        [seatIndex]: {
-          ...(prev[seatIndex] ?? {
-            offerCode: '',
-            answerInput: '',
-            creating: false,
-            error: null,
-          }),
-          connected,
-        },
-      }));
+      setConnectedSeats((prev) =>
+        connected
+          ? prev.includes(seatIndex)
+            ? prev
+            : [...prev, seatIndex]
+          : prev.filter((s) => s !== seatIndex)
+      );
+
       if (connected) {
         setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
         setPlayers((prev) => {
@@ -314,7 +300,7 @@ export function useMultiplayerGame() {
     [broadcastAll]
   );
 
-  // Auto-manage LobbyHostRoom whenever any non-local seat (Bot or P2P) exists so Lobby Code is always ready
+  // Auto-manage LobbyHostRoom whenever any non-local seat (Bot or P2P) exists
   const hasJoinableSeats = players.some(
     (p, idx) => idx > 0 && p.active && p.seatType !== 'human-local'
   );
@@ -351,121 +337,12 @@ export function useMultiplayerGame() {
     }
   }, [isGuest, hasJoinableSeats, handleHostMessage, handleHostStatusChange]);
 
-  const ensureHostManager = useCallback(() => {
-    if (!hostManagerRef.current) {
-      hostManagerRef.current = new WebRTCHostManager(
-        handleHostMessage,
-        handleHostStatusChange
-      );
-    }
-    return hostManagerRef.current;
-  }, [handleHostMessage, handleHostStatusChange]);
-
-  const handleCreateOffer = async (seatIndex: number) => {
-    const mgr = ensureHostManager();
-    setRemoteSlots((prev) => ({
-      ...prev,
-      [seatIndex]: {
-        offerCode: '',
-        answerInput: '',
-        connected: false,
-        creating: true,
-        error: null,
-      },
-    }));
-    try {
-      const offerCode = await mgr.createOfferForSeat(seatIndex);
-      setRemoteSlots((prev) => ({
-        ...prev,
-        [seatIndex]: {
-          offerCode,
-          answerInput: '',
-          connected: false,
-          creating: false,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      setRemoteSlots((prev) => ({
-        ...prev,
-        [seatIndex]: {
-          offerCode: '',
-          answerInput: '',
-          connected: false,
-          creating: false,
-          error: err instanceof Error ? err.message : 'WebRTC error',
-        },
-      }));
-    }
-  };
-
-  const handleAcceptAnswer = async (seatIndex: number, answerCode: string) => {
-    const mgr = ensureHostManager();
-    try {
-      await mgr.acceptAnswerForSeat(seatIndex, answerCode);
-    } catch (err) {
-      setRemoteSlots((prev) => ({
-        ...prev,
-        [seatIndex]: {
-          ...(prev[seatIndex] ?? {
-            offerCode: '',
-            answerInput: '',
-            connected: false,
-            creating: false,
-          }),
-          error: err instanceof Error ? err.message : 'Invalid answer code',
-        },
-      }));
-    }
-  };
-
-  const handleGuestCreateAnswer = useCallback(async (offerCode: string) => {
-    sound.unlock();
-    setGuestError(null);
-    try {
-      if (!guestClientRef.current) {
-        guestClientRef.current = new WebRTCGuestClient(
-          (msg: NetMessage) => {
-            if (msg.kind === 'STATE_SYNC') {
-              setGameState((prev) => {
-                playTransitionSounds(prev, msg.state);
-                return msg.state;
-              });
-            } else if (msg.kind === 'LOBBY_SYNC') {
-              setLobbyRoster(msg.players);
-            } else if (msg.kind === 'RETURN_TO_LOBBY') {
-              setGameState(null);
-            }
-          },
-          (connected) => {
-            setGuestConnected(connected);
-            if (connected) {
-              const clean = guestNameRef.current.trim().slice(0, 18);
-              if (clean) {
-                guestClientRef.current?.send({ kind: 'SET_NAME', name: clean });
-              }
-              if (guestMajorRef.current.trim() || guestEmojiRef.current.trim()) {
-                guestClientRef.current?.send({
-                  kind: 'SET_PROFILE',
-                  major: guestMajorRef.current,
-                  emoji: guestEmojiRef.current,
-                });
-              }
-            }
-          }
-        );
-      }
-      const { answerCode, assignedSeat } =
-        await guestClientRef.current.acceptOfferAndCreateAnswer(offerCode);
-      setGuestAnswerCode(answerCode);
-      setGuestSeat(assignedSeat);
-    } catch (err) {
-      setGuestError(err instanceof Error ? err.message : 'Failed to parse Offer code');
-    }
-  }, []);
-
   const handleGuestJoinRoom = useCallback((roomCode: string) => {
-    sound.unlock();
+    const normalized = roomCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (lobbyHostRef.current && normalized === lobbyHostRef.current.lobbyCode) {
+      setGuestError('Cannot join your own lobby');
+      return;
+    }
     setGuestError(null);
     setGuestConnecting(true);
     lobbyGuestRef.current?.close();
@@ -473,23 +350,26 @@ export function useMultiplayerGame() {
       onMessage: (msg: NetMessage) => {
         if (msg.kind === 'WELCOME') {
           setGuestSeat(msg.assignedSeat);
-          if (msg.state) setGameState(msg.state);
+          if (msg.state) {
+            playTransitionSounds(gameStateRef.current, msg.state);
+            setGameState(msg.state);
+          }
           const clean = guestNameRef.current.trim().slice(0, 18);
           if (clean) {
             client.send({ kind: 'SET_NAME', name: clean });
           }
-          if (guestMajorRef.current.trim() || guestEmojiRef.current.trim()) {
+          const cleanMajor = guestMajorRef.current.trim().slice(0, 28);
+          const cleanEmoji = guestEmojiRef.current.trim().slice(0, 8);
+          if (cleanMajor || cleanEmoji) {
             client.send({
               kind: 'SET_PROFILE',
-              major: guestMajorRef.current,
-              emoji: guestEmojiRef.current,
+              ...(cleanMajor ? { major: cleanMajor } : {}),
+              ...(cleanEmoji ? { emoji: cleanEmoji } : {}),
             });
           }
         } else if (msg.kind === 'STATE_SYNC') {
-          setGameState((prev) => {
-            playTransitionSounds(prev, msg.state);
-            return msg.state;
-          });
+          playTransitionSounds(gameStateRef.current, msg.state);
+          setGameState(msg.state);
         } else if (msg.kind === 'LOBBY_SYNC') {
           setLobbyRoster(msg.players);
         } else if (msg.kind === 'RETURN_TO_LOBBY') {
@@ -515,8 +395,6 @@ export function useMultiplayerGame() {
   const dispatchAction = useCallback(
     (action: GameAction) => {
       if (isGuest) {
-        sound.unlock();
-        guestClientRef.current?.send({ kind: 'PLAYER_ACTION', action });
         lobbyGuestRef.current?.send({ kind: 'PLAYER_ACTION', action });
       } else {
         applyHostAction(action);
@@ -573,29 +451,20 @@ export function useMultiplayerGame() {
   }, [gameState, isGuest, guestSeat]);
 
   const handleCloseRemoteSeat = (seatIndex: number) => {
-    hostManagerRef.current?.closeSeat(seatIndex);
     lobbyHostRef.current?.closeSeat(seatIndex);
-    setRemoteSlots((prev) => {
-      const next = { ...prev };
-      delete next[seatIndex];
-      return next;
-    });
+    setConnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
     setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
   };
 
   const handleGuestLeave = () => {
     if (guestConnected) {
-      guestClientRef.current?.send({ kind: 'LEAVE_GAME' });
       lobbyGuestRef.current?.send({ kind: 'LEAVE_GAME' });
     }
-    guestClientRef.current?.close();
-    guestClientRef.current = null;
     lobbyGuestRef.current?.close();
     lobbyGuestRef.current = null;
     setGuestSeat(null);
     setGuestConnected(false);
     setGuestConnecting(false);
-    setGuestAnswerCode('');
     setGuestError(null);
     setLobbyRoster(null);
     setGameState(null);
@@ -628,9 +497,9 @@ export function useMultiplayerGame() {
 
   const handleStartGame = () => {
     setDisconnectedSeats([]);
-    // Any P2P seat that never connected automatically becomes a Bot
+    const connectedSet = new Set(connectedSeats);
     const resolvedPlayers = players.map((p, idx) => {
-      if (p.active && p.seatType === 'human-remote' && !remoteSlots[idx]?.connected) {
+      if (p.active && p.seatType === 'human-remote' && !connectedSet.has(idx)) {
         return {
           ...p,
           seatType: 'bot' as const,
@@ -655,7 +524,6 @@ export function useMultiplayerGame() {
     if (guestConnected) {
       const clean = name.trim().slice(0, 18);
       if (clean) {
-        guestClientRef.current?.send({ kind: 'SET_NAME', name: clean });
         lobbyGuestRef.current?.send({ kind: 'SET_NAME', name: clean });
       }
     }
@@ -664,51 +532,39 @@ export function useMultiplayerGame() {
   const updateGuestMajor = (major: string) => {
     setGuestMajor(major);
     if (guestConnected) {
-      const msg: NetMessage = { kind: 'SET_PROFILE', major };
-      guestClientRef.current?.send(msg);
-      lobbyGuestRef.current?.send(msg);
+      lobbyGuestRef.current?.send({ kind: 'SET_PROFILE', major: major.trim().slice(0, 28) });
     }
   };
 
   const updateGuestEmoji = (emoji: string) => {
     setGuestEmoji(emoji);
     if (guestConnected) {
-      const msg: NetMessage = { kind: 'SET_PROFILE', emoji };
-      guestClientRef.current?.send(msg);
-      lobbyGuestRef.current?.send(msg);
+      lobbyGuestRef.current?.send({ kind: 'SET_PROFILE', emoji: emoji.trim().slice(0, 8) });
     }
   };
 
-  const updateAnswerInput = (seatIndex: number, value: string) => {
-    setRemoteSlots((prev) => ({
-      ...prev,
-      [seatIndex]: {
-        ...(prev[seatIndex] ?? {
-          offerCode: '',
-          connected: false,
-          creating: false,
-          error: null,
-        }),
-        answerInput: value,
-      },
-    }));
-  };
+  const getConnectionTransports = useCallback(async (): Promise<Record<number, IceTransportKind>> => {
+    if (isGuest) {
+      const kind = await lobbyGuestRef.current?.getTransportKind();
+      return kind ? { 0: kind } : {};
+    }
+    return (await lobbyHostRef.current?.getSeatTransportKinds()) ?? {};
+  }, [isGuest]);
 
   return {
     players,
     gameState,
     isGuest,
+    guestSeat,
     localSeatIndices,
-    remoteSlots,
+    connectedSeats,
     disconnectedSeats,
     hostLobbyCode,
     hostLobbyError,
-    initialJoinCode,
     initialRoomCode,
     guestName,
     guestMajor,
     guestEmoji,
-    guestAnswerCode,
     guestConnected,
     guestConnecting,
     guestError,
@@ -717,16 +573,13 @@ export function useMultiplayerGame() {
     updateGuestName,
     updateGuestMajor,
     updateGuestEmoji,
-    updateAnswerInput,
-    handleCreateOffer,
-    handleAcceptAnswer,
     handleCloseRemoteSeat,
     handleGuestJoinRoom,
-    handleGuestCreateAnswer,
     handleGuestLeave,
     handleStartGame,
     handleBackToLobby,
     handleTakeOverAsBot,
     dispatchAction,
+    getConnectionTransports,
   };
 }
