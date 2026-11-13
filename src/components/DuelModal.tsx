@@ -151,14 +151,40 @@ export const DuelModal: React.FC<DuelModalProps> = ({
 
         {state.phase === 'DUEL_RESULT' && duel.winner && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-            <div className="stamp-badge stamp-exmatrikuliert animate-stamp" style={{ fontSize: '1.05rem' }}>
-              {t.stampExmatriculated}
-            </div>
-            <div style={{ fontSize: '0.92rem', fontWeight: 600 }}>
-              {duel.winner === 'attacker'
-                ? `${defender.name} → ${language === 'de' ? 'zurück ins Wohnheim!' : 'back to dorm!'}`
-                : `${attacker.name} → ${language === 'de' ? 'zurück ins Wohnheim!' : 'back to dorm!'}`}
-            </div>
+            {state.settings.duelMode === 'push' ? (
+              <>
+                <div className="stamp-badge stamp-immatrikuliert animate-stamp" style={{ fontSize: '1.05rem' }}>
+                  {duel.winner === 'attacker' ? attacker.name : defender.name}{' '}
+                  {language === 'de' ? 'GEWINNT!' : 'WINS!'}
+                </div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.4 }}>
+                  {duel.winner === 'attacker' ? attacker.name : defender.name}:{' '}
+                  +{duel.winnerMoved ?? duel.loserSum ?? 0}{' '}
+                  {language === 'de' ? 'vor' : 'forward'} ·{' '}
+                  {duel.winner === 'attacker' ? defender.name : attacker.name}:{' '}
+                  -{duel.loserMoved ?? duel.winnerSum ?? 0}{' '}
+                  {language === 'de' ? 'zurück' : 'back'}
+                </div>
+                {(state.queuedEvents?.length ?? 0) > 0 && (
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--stamp-red)' }}>
+                    {language === 'de'
+                      ? '⚡ Folge-Ereignis ausgelöst!'
+                      : '⚡ Follow-up event triggered!'}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="stamp-badge stamp-exmatrikuliert animate-stamp" style={{ fontSize: '1.05rem' }}>
+                  {t.stampExmatriculated}
+                </div>
+                <div style={{ fontSize: '0.92rem', fontWeight: 600 }}>
+                  {duel.winner === 'attacker'
+                    ? `${defender.name} → ${language === 'de' ? 'zurück ins Wohnheim!' : 'back to dorm!'}`
+                    : `${attacker.name} → ${language === 'de' ? 'zurück ins Wohnheim!' : 'back to dorm!'}`}
+                </div>
+              </>
+            )}
           </div>
         )}
 

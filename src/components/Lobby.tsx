@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Language, PlayerConfig } from '../game/types';
+import type { GameSettings, Language, PlayerConfig } from '../game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../i18n/translations';
 import {
   ALL_DEFAULT_NAMES,
@@ -13,6 +13,8 @@ import {
 interface LobbyProps {
   language: Language;
   players: PlayerConfig[];
+  settings: GameSettings;
+  lobbySettings: GameSettings | null;
   lobbyRoster: PlayerConfig[] | null;
   connectedSeats: number[];
   hostLobbyCode: string | null;
@@ -27,6 +29,7 @@ interface LobbyProps {
   guestConnecting: boolean;
   guestError: string | null;
   onChangePlayers: (players: PlayerConfig[]) => void;
+  onChangeSettings: (settings: GameSettings) => void;
   onChangeGuestName: (name: string) => void;
   onChangeGuestMajor: (major: string) => void;
   onChangeGuestEmoji: (emoji: string) => void;
@@ -40,6 +43,8 @@ interface LobbyProps {
 export const Lobby: React.FC<LobbyProps> = ({
   language,
   players,
+  settings,
+  lobbySettings,
   lobbyRoster,
   connectedSeats,
   hostLobbyCode,
@@ -54,6 +59,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   guestConnecting,
   guestError,
   onChangePlayers,
+  onChangeSettings,
   onChangeGuestName,
   onChangeGuestMajor,
   onChangeGuestEmoji,
@@ -760,6 +766,142 @@ export const Lobby: React.FC<LobbyProps> = ({
             );
           })}
         </div>
+
+        {/* Hardcore Mode Toggle */}
+        {(() => {
+          const activeHardcore = isGuest ? (lobbySettings?.hardcore ?? false) : settings.hardcore;
+          return (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: '10px',
+                border: `2px solid ${activeHardcore ? 'var(--stamp-red)' : '#cbbba0'}`,
+                background: activeHardcore ? '#fdf1ef' : '#fffdf7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontWeight: 800, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🔥</span>
+                  <span>{language === 'de' ? 'Hardcore-Modus' : 'Hardcore Mode'}</span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', marginTop: '2px', lineHeight: 1.35 }}>
+                  {language === 'de'
+                    ? '🍽️ Mensa, ☕ Bib, 📝 Prüfungsamt, 🍺 Party & 🎲 6-6-6 (50/50 Sofortsieg oder Zwangsexmatrikulation!).'
+                    : '🍽️ Cafeteria, ☕ Library, 📝 Exam Office, 🍺 Party & 🎲 6-6-6 (50/50 instant win or full reset!).'}
+                </div>
+              </div>
+
+              {isGuest ? (
+                <span
+                  className={`stamp-badge ${activeHardcore ? 'stamp-exmatrikuliert' : ''}`}
+                  style={{ fontSize: '0.74rem' }}
+                >
+                  {activeHardcore
+                    ? language === 'de'
+                      ? 'AKTIV'
+                      : 'ON'
+                    : language === 'de'
+                      ? 'AUS'
+                      : 'OFF'}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.hardcore}
+                  onClick={() => onChangeSettings({ ...settings, hardcore: !settings.hardcore })}
+                  className={`tactile-btn ${settings.hardcore ? 'primary' : ''}`}
+                  style={{ padding: '7px 14px', fontSize: '0.84rem', minWidth: '86px' }}
+                >
+                  {settings.hardcore
+                    ? language === 'de'
+                      ? '🔥 AN'
+                      : '🔥 ON'
+                    : language === 'de'
+                      ? 'AUS'
+                      : 'OFF'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* 1v1 Duel Mode Toggle */}
+        {(() => {
+          const activeDuelMode = isGuest
+            ? (lobbySettings?.duelMode ?? 'classic')
+            : (settings.duelMode ?? 'classic');
+          const isPush = activeDuelMode === 'push';
+          return (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: '10px',
+                border: `2px solid ${isPush ? 'var(--c-blau)' : '#cbbba0'}`,
+                background: isPush ? '#eef5fc' : '#fffdf7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontWeight: 800, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⚔️</span>
+                  <span>{language === 'de' ? '1v1-Duell: Augensumme' : '1v1 Duel: Push Mode'}</span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', marginTop: '2px', lineHeight: 1.35 }}>
+                  {language === 'de'
+                    ? 'Statt Wohnheim: Sieger zieht Verlierer-Augensumme vor, Verlierer Sieger-Augensumme zurück (inkl. Ketten-1v1!).'
+                    : 'Instead of base: winner moves +loser sum forward, loser moves -winner sum back (with chain 1v1s!).'}
+                </div>
+              </div>
+
+              {isGuest ? (
+                <span
+                  className={`stamp-badge ${isPush ? 'stamp-immatrikuliert' : ''}`}
+                  style={{ fontSize: '0.74rem' }}
+                >
+                  {isPush
+                    ? language === 'de'
+                      ? 'VOR/ZURÜCK'
+                      : 'PUSH'
+                    : language === 'de'
+                      ? 'KLASSISCH'
+                      : 'CLASSIC'}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isPush}
+                  onClick={() =>
+                    onChangeSettings({
+                      ...settings,
+                      duelMode: isPush ? 'classic' : 'push',
+                    })
+                  }
+                  className={`tactile-btn ${isPush ? 'primary' : ''}`}
+                  style={{ padding: '7px 14px', fontSize: '0.84rem', minWidth: '86px' }}
+                >
+                  {isPush
+                    ? language === 'de'
+                      ? '⚔️ AN'
+                      : '⚔️ ON'
+                    : language === 'de'
+                      ? 'AUS'
+                      : 'OFF'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Start Game (Host) or Waiting Status (Guest) */}
         {isGuest ? (

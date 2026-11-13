@@ -1,4 +1,4 @@
-import type { PlayerColor } from './types';
+import type { ActivityType, PlayerColor } from './types';
 
 export interface GridCoord {
   row: number; // 0..10
@@ -130,3 +130,18 @@ export function stepsFromStart(color: PlayerColor, trackIndex: number): number {
   const start = START_INDEX_BY_COLOR[color];
   return (trackIndex - start + 40) % 40;
 }
+
+/**
+ * Symmetric Hardcore Mode activity tiles on the 40-tile track.
+ * Avoids start tiles (0, 10, 20, 30) and goal-entry tiles (9, 19, 29, 39).
+ */
+export const ACTIVITY_TILE_MAP: Record<number, Exclude<ActivityType, 'tripleSix'>> = {
+  4: 'mensa',
+  24: 'mensa',
+  14: 'bib',
+  34: 'bib',
+  7: 'examOffice',
+  27: 'examOffice',
+  17: 'party',
+  37: 'party',
+};

@@ -41,6 +41,12 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player} hat den Abschluss!`;
       case 'turn':
         return `${player} hatte keinen Zug.`;
+      case 'activity_good':
+        return `${player}: Hardcore-Glück (${entry.detail})!`;
+      case 'activity_bad':
+        return `${player}: Hardcore-Pech (${entry.detail})!`;
+      case 'turn_skipped':
+        return `${player} muss diese Runde aussetzen.`;
       default:
         return `${player}: ${entry.type}`;
     }
@@ -58,6 +64,12 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player} graduated!`;
       case 'turn':
         return `${player} had no legal move.`;
+      case 'activity_good':
+        return `${player}: Hardcore lucky break (${entry.detail})!`;
+      case 'activity_bad':
+        return `${player}: Hardcore unlucky (${entry.detail})!`;
+      case 'turn_skipped':
+        return `${player} skips this turn.`;
       default:
         return `${player}: ${entry.type}`;
     }

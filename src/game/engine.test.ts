@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chooseBestBotPawn } from './bot';
 import {
+  acknowledgeActivity,
   acknowledgeDuel,
   createInitialState,
   resolveDuelRoll,
@@ -153,5 +154,225 @@ describe('Mensch exmatrikuliere dich nicht - Game Engine', () => {
     state = rollDice(state, seqRng([1]));
     const choice = chooseBestBotPawn(state);
     expect(choice).toBe('blau-0');
+  });
+
+  it('hardcore mode triggers Mensa good (+3) and bad (skip turn) outcomes', () => {
+    // Good outcome (rng < 0.5)
+    let state = createInitialState(twoPlayers(), { hardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) =>
+        p.id === 'rot-0' ? { ...p, location: { zone: 'track', index: 0 } } : p
+      ),
+    };
+    state = rollDice(state, seqRng([4]));
+    state = selectPawn(state, 'rot-0', () => 0.1);
+    expect(state.phase).toBe('ACTIVITY_RESULT');
+    expect(state.activity?.type).toBe('mensa');
+    expect(state.activity?.outcome).toBe('good');
+    expect(state.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({
+      zone: 'track',
+      index: 7,
+    });
+    state = acknowledgeActivity(state);
+    expect(state.phase).toBe('WAIT_ROLL');
+    expect(state.currentTurn).toBe(1);
+
+    // Bad outcome (rng >= 0.5) -> skips Rot's next turn
+    state = {
+      ...state,
+      currentTurn: 0,
+      pawns: state.pawns.map((p) =>
+        p.id === 'rot-0' ? { ...p, location: { zone: 'track', index: 0 } } : p
+      ),
+    };
+    state = rollDice(state, seqRng([4]));
+    state = selectPawn(state, 'rot-0', () => 0.9);
+    expect(state.activity?.outcome).toBe('bad');
+    expect(state.skippedTurns[0]).toBe(1);
+    state = acknowledgeActivity(state);
+    expect(state.currentTurn).toBe(1); // Blau's turn
+
+    // Blau rolls 1 (moves blau-0 from base? No, rolls 1 in base -> 3 attempts or pass)
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) =>
+        p.id === 'blau-0' ? { ...p, location: { zone: 'track', index: 11 } } : p
+      ),
+    };
+    state = rollDice(state, seqRng([1]));
+    state = selectPawn(state, 'blau-0', () => 0.1);
+    // Rot was supposed to be next, but skippedTurns[0] === 1 -> wraps back to Blau!
+    expect(state.currentTurn).toBe(1);
+    expect(state.skippedTurns[0]).toBe(0);
+  });
+
+  it('hardcore activity boost can enter goal and trigger duel on opponent', () => {
+    let state = createInitialState(twoPlayers(), { hardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 0 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 7 } };
+        return p;
+      }),
+    };
+    // Rot rolls 4 -> lands on Mensa (4), gets +3 -> lands on 7 where blau-0 is!
+    state = rollDice(state, seqRng([4]));
+    state = selectPawn(state, 'rot-0', () => 0.1);
+    expect(state.phase).toBe('ACTIVITY_RESULT');
+    expect(state.activity?.pendingDuelOpponentId).toBe('blau-0');
+    state = acknowledgeActivity(state);
+    expect(state.phase).toBe('DUEL_ROLL');
+    expect(state.duel?.defenderPawnId).toBe('blau-0');
+  });
+
+  it('hardcore 6-6-6 triggers 50/50 instant win or full exmatriculation', () => {
+    // 1) Win case
+    let winState = createInitialState(twoPlayers(), { hardcore: true });
+    winState = {
+      ...winState,
+      pawns: winState.pawns.map((p) =>
+        p.id === 'rot-0' ? { ...p, location: { zone: 'track', index: 0 } } : p
+      ),
+    };
+    winState = rollDice(winState, seqRng([6]));
+    winState = selectPawn(winState, 'rot-0', () => 0.9);
+    winState = rollDice(winState, seqRng([6]));
+    winState = selectPawn(winState, 'rot-1', () => 0.9);
+    // 3rd six in a row, rng < 0.5 -> win!
+    winState = rollDice(winState, () => 0.85); // rollD6(0.85) = 6, wait: 0.85 used for both rollD6 and win?
+    // Use separate sequence: 0.9 for rollD6 (=6), then 0.1 for win (<0.5)
+    let winState2 = createInitialState(twoPlayers(), { hardcore: true });
+    winState2 = {
+      ...winState2,
+      consecutiveSixes: 2,
+      pawns: winState2.pawns.map((p) =>
+        p.id === 'rot-0' ? { ...p, location: { zone: 'track', index: 5 } } : p
+      ),
+    };
+    let call = 0;
+    winState2 = rollDice(winState2, () => (call++ === 0 ? 0.9 : 0.1));
+    expect(winState2.phase).toBe('ACTIVITY_RESULT');
+    expect(winState2.activity?.type).toBe('tripleSix');
+    expect(winState2.activity?.winGame).toBe(true);
+    winState2 = acknowledgeActivity(winState2);
+    expect(winState2.phase).toBe('GAME_OVER');
+    expect(winState2.winnerIndex).toBe(0);
+
+    // 2) Lose case: all pawns exmatriculated to base
+    let loseState = createInitialState(twoPlayers(), { hardcore: true });
+    loseState = {
+      ...loseState,
+      consecutiveSixes: 2,
+      pawns: loseState.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 12 } };
+        if (p.id === 'rot-1') return { ...p, location: { zone: 'goal', slot: 2 } };
+        return p;
+      }),
+    };
+    let call2 = 0;
+    loseState = rollDice(loseState, () => (call2++ === 0 ? 0.9 : 0.8));
+    expect(loseState.phase).toBe('ACTIVITY_RESULT');
+    expect(loseState.activity?.exmatriculateAll).toBe(true);
+    expect(
+      loseState.pawns
+        .filter((p) => p.playerIndex === 0)
+        .every((p) => p.location.zone === 'base')
+    ).toBe(true);
+    loseState = acknowledgeActivity(loseState);
+    expect(loseState.phase).toBe('WAIT_ROLL');
+    expect(loseState.currentTurn).toBe(1);
+  });
+
+  it('duel push mode sums ties, moves winner +loserSum and loser -winnerSum, and clamps', () => {
+    let state = createInitialState(twoPlayers(), { hardcore: false, duelMode: 'push' });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 12 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 15 } }; // 5 steps from blau start (10)
+        return p;
+      }),
+    };
+
+    // Rot rolls 3 -> lands on 15 -> duel with blau-0
+    state = rollDice(state, seqRng([3]));
+    state = selectPawn(state, 'rot-0');
+    expect(state.phase).toBe('DUEL_ROLL');
+
+    // Round 1: 6:6 tie; Round 2: 2:1 (Rot wins: Rot sum = 8, Blau sum = 7)
+    state = resolveDuelRoll(state, seqRng([6, 6]));
+    expect(state.phase).toBe('DUEL_ROLL');
+    state = resolveDuelRoll(state, seqRng([2, 1]));
+    expect(state.phase).toBe('DUEL_RESULT');
+    expect(state.duel?.winner).toBe('attacker');
+    expect(state.duel?.winnerSum).toBe(8);
+    expect(state.duel?.loserSum).toBe(7);
+    expect(state.duel?.winnerMoved).toBe(7);
+
+    // Rot moved +7 from 15 -> 22
+    expect(state.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({
+      zone: 'track',
+      index: 22,
+    });
+    // Blau was at 15 (5 steps from start 10), pushed -8 -> clamped to 0 steps (index 10)
+    expect(state.pawns.find((p) => p.id === 'blau-0')?.location).toEqual({
+      zone: 'track',
+      index: 10,
+    });
+
+    state = acknowledgeDuel(state);
+    expect(state.phase).toBe('WAIT_ROLL');
+    expect(state.currentTurn).toBe(1);
+  });
+
+  it('duel push mode enters goal without jumping and chains next 1v1 duel', () => {
+    let state = createInitialState(twoPlayers(), { hardcore: false, duelMode: 'push' });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 37 } };
+        if (p.id === 'rot-1') return { ...p, location: { zone: 'goal', slot: 2 } }; // blocks slot 2 & 3
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 38 } };
+        if (p.id === 'blau-1') return { ...p, location: { zone: 'track', index: 32 } }; // blau-0 pushed -6 from 38 -> 32!
+        return p;
+      }),
+    };
+
+    // Rot rolls 1 -> lands on 38 -> duel with blau-0
+    state = rollDice(state, seqRng([1]));
+    state = selectPawn(state, 'rot-0');
+    // Rot rolls 6, Blau rolls 5 -> Rot wins (+5 forward from 38 -> 43 = goal slot 3, blocked by rot-1 at slot 2 -> stops at goal slot 1!)
+    // Blau pushed -6 from 38 -> 32 -> collides with blau-1 (own pawn) -> stops 1 tile short at 33!
+    state = resolveDuelRoll(state, seqRng([6, 5]));
+    expect(state.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({
+      zone: 'goal',
+      slot: 1,
+    });
+    expect(state.pawns.find((p) => p.id === 'blau-0')?.location).toEqual({
+      zone: 'track',
+      index: 33,
+    });
+
+    // Now test chain 1v1 duel when winner lands on another opponent
+    let chainState = createInitialState(twoPlayers(), { hardcore: false, duelMode: 'push' });
+    chainState = {
+      ...chainState,
+      pawns: chainState.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 12 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 14 } };
+        if (p.id === 'blau-1') return { ...p, location: { zone: 'track', index: 17 } }; // 14 + 3 = 17!
+        return p;
+      }),
+    };
+    chainState = rollDice(chainState, seqRng([2]));
+    chainState = selectPawn(chainState, 'rot-0');
+    // Rot rolls 5, Blau rolls 3 -> Rot moves +3 from 14 to 17 (where blau-1 is!)
+    chainState = resolveDuelRoll(chainState, seqRng([5, 3]));
+    expect(chainState.phase).toBe('DUEL_RESULT');
+    chainState = acknowledgeDuel(chainState);
+    expect(chainState.phase).toBe('DUEL_ROLL');
+    expect(chainState.duel?.defenderPawnId).toBe('blau-1');
   });
 });

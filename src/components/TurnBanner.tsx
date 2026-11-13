@@ -35,7 +35,9 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
   if (state.phase === 'SELECT_PAWN') phaseLabel = t.selectPawn;
   else if (state.phase === 'DUEL_ROLL') phaseLabel = t.duelRollPrompt;
   else if (state.phase === 'DUEL_RESULT') phaseLabel = t.duelResultPrompt;
-  else if (state.phase === 'GAME_OVER') phaseLabel = t.winnerTitle;
+  else if (state.phase === 'ACTIVITY_RESULT') {
+    phaseLabel = language === 'de' ? 'Hardcore-Ereignis!' : 'Hardcore Event!';
+  } else if (state.phase === 'GAME_OVER') phaseLabel = t.winnerTitle;
 
   return (
     <header

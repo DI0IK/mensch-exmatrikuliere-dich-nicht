@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sound } from './audio/sound';
 import { ActionDock } from './components/ActionDock';
+import { ActivityModal } from './components/ActivityModal';
 import { DuelModal } from './components/DuelModal';
 import { GameBoard } from './components/GameBoard';
 import { Lobby } from './components/Lobby';
@@ -25,7 +26,9 @@ export function App() {
   const activeTurnSeat = state
     ? state.phase === 'DUEL_ROLL' || state.phase === 'DUEL_RESULT'
       ? state.duel?.attackerPlayerIndex ?? state.currentTurn
-      : state.currentTurn
+      : state.phase === 'ACTIVITY_RESULT'
+        ? state.activity?.playerIndex ?? state.currentTurn
+        : state.currentTurn
     : -1;
 
   const canLocalAct = state !== null && game.localSeatIndices.includes(activeTurnSeat);
@@ -76,6 +79,8 @@ export function App() {
       <Lobby
         language={language}
         players={game.players}
+        settings={game.settings}
+        lobbySettings={game.lobbySettings}
         lobbyRoster={game.lobbyRoster}
         connectedSeats={game.connectedSeats}
         hostLobbyCode={game.hostLobbyCode}
@@ -90,6 +95,7 @@ export function App() {
         guestConnecting={game.guestConnecting}
         guestError={game.guestError}
         onChangePlayers={game.updatePlayers}
+        onChangeSettings={game.updateSettings}
         onChangeGuestName={game.updateGuestName}
         onChangeGuestMajor={game.updateGuestMajor}
         onChangeGuestEmoji={game.updateGuestEmoji}
@@ -154,6 +160,15 @@ export function App() {
         }
         onAcknowledge={() =>
           game.dispatchAction({ type: 'ACK_DUEL', playerIndex: activeTurnSeat })
+        }
+      />
+
+      <ActivityModal
+        state={state}
+        language={language}
+        canAct={canLocalAct}
+        onAcknowledge={() =>
+          game.dispatchAction({ type: 'ACK_ACTIVITY', playerIndex: activeTurnSeat })
         }
       />
 

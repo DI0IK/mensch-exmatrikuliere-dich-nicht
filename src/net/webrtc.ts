@@ -1,8 +1,8 @@
-import type { GameAction, GameState, PlayerConfig } from '../game/types';
+import type { GameAction, GameSettings, GameState, PlayerConfig } from '../game/types';
 
 export type NetMessage =
   | { kind: 'WELCOME'; assignedSeat: number; state: GameState | null }
-  | { kind: 'LOBBY_SYNC'; players: PlayerConfig[] }
+  | { kind: 'LOBBY_SYNC'; players: PlayerConfig[]; settings?: GameSettings }
   | { kind: 'SET_NAME'; name: string }
   | { kind: 'SET_PROFILE'; major?: string; emoji?: string }
   | { kind: 'STATE_SYNC'; state: GameState }

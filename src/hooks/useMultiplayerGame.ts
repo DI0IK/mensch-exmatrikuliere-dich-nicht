@@ -3,13 +3,14 @@ import { sound } from '../audio/sound';
 import { DEFAULT_NAMES } from '../components/lobby/types';
 import { chooseBestBotPawn } from '../game/bot';
 import {
+  acknowledgeActivity,
   acknowledgeDuel,
   createInitialState,
   resolveDuelRoll,
   rollDice,
   selectPawn,
 } from '../game/engine';
-import type { GameAction, GameState, PlayerConfig } from '../game/types';
+import type { GameAction, GameSettings, GameState, PlayerConfig } from '../game/types';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
 
@@ -46,6 +47,18 @@ function playTransitionSounds(prev: GameState | null, next: GameState): void {
     sound.playDiceRoll();
     return;
   }
+  if (next.phase === 'ACTIVITY_RESULT' && prev.phase !== 'ACTIVITY_RESULT') {
+    if (next.activity?.outcome === 'bad') {
+      sound.playStampThud();
+    } else {
+      sound.playPawnTap();
+    }
+    return;
+  }
+  if (prev.phase === 'ACTIVITY_RESULT' && next.phase !== 'ACTIVITY_RESULT') {
+    sound.playPawnTap();
+    return;
+  }
   if (prev.phase === 'DUEL_RESULT' && next.phase !== 'DUEL_RESULT') {
     sound.playPawnTap();
     return;
@@ -69,6 +82,10 @@ function playTransitionSounds(prev: GameState | null, next: GameState): void {
 
 export function useMultiplayerGame() {
   const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
+  const [settings, setSettings] = useState<GameSettings>({ hardcore: false, duelMode: 'classic' });
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const [lobbySettings, setLobbySettings] = useState<GameSettings | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
 
   // Host P2P state
@@ -113,7 +130,8 @@ export function useMultiplayerGame() {
         if (
           action.playerIndex !== prev.currentTurn &&
           prev.phase !== 'DUEL_ROLL' &&
-          prev.phase !== 'DUEL_RESULT'
+          prev.phase !== 'DUEL_RESULT' &&
+          prev.phase !== 'ACTIVITY_RESULT'
         ) {
           return prev;
         }
@@ -124,16 +142,29 @@ export function useMultiplayerGame() {
         ) {
           return prev;
         }
+        if (
+          prev.phase === 'ACTIVITY_RESULT' &&
+          prev.activity &&
+          action.playerIndex !== prev.activity.playerIndex
+        ) {
+          return prev;
+        }
 
         let next = prev;
         switch (action.type) {
           case 'ROLL_DICE':
             sound.playDiceRoll();
             next = rollDice(prev);
+            if (next.phase === 'ACTIVITY_RESULT' && next.activity?.outcome === 'bad') {
+              sound.playStampThud();
+            }
             break;
           case 'SELECT_PAWN':
             sound.playPawnTap();
             next = selectPawn(prev, action.pawnId);
+            if (next.phase === 'ACTIVITY_RESULT' && next.activity?.outcome === 'bad') {
+              sound.playStampThud();
+            }
             break;
           case 'DUEL_ROLL':
             sound.playDiceRoll();
@@ -145,6 +176,10 @@ export function useMultiplayerGame() {
           case 'ACK_DUEL':
             sound.playPawnTap();
             next = acknowledgeDuel(prev);
+            break;
+          case 'ACK_ACTIVITY':
+            sound.playPawnTap();
+            next = acknowledgeActivity(prev);
             break;
         }
 
@@ -170,7 +205,7 @@ export function useMultiplayerGame() {
           const nextPlayers = prev.map((p, i) =>
             i === seatIndex ? { ...p, name: cleanName } : p
           );
-          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
           return nextPlayers;
         });
         setGameState((prev) => {
@@ -197,7 +232,7 @@ export function useMultiplayerGame() {
                 }
               : p
           );
-          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
           return nextPlayers;
         });
         setGameState((prev) => {
@@ -227,7 +262,7 @@ export function useMultiplayerGame() {
               ? { ...p, seatType: 'bot' as const, name: DEFAULT_NAMES.bot[i] ?? p.name }
               : p
           );
-          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
           return nextPlayers;
         });
         setGameState((prev) => {
@@ -262,7 +297,7 @@ export function useMultiplayerGame() {
           const nextPlayers = prev.map((p, i) =>
             i === seatIndex ? { ...p, seatType: 'human-remote' as const } : p
           );
-          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
           return nextPlayers;
         });
         if (gameStateRef.current) {
@@ -287,7 +322,7 @@ export function useMultiplayerGame() {
               ? { ...p, seatType: 'bot' as const, name: DEFAULT_NAMES.bot[i] ?? p.name }
               : p
           );
-          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
           return nextPlayers;
         });
         if (gameStateRef.current) {
@@ -372,6 +407,7 @@ export function useMultiplayerGame() {
           setGameState(msg.state);
         } else if (msg.kind === 'LOBBY_SYNC') {
           setLobbyRoster(msg.players);
+          if (msg.settings) setLobbySettings(msg.settings);
         } else if (msg.kind === 'RETURN_TO_LOBBY') {
           setGameState(null);
         } else if (msg.kind === 'ROOM_ERROR') {
@@ -410,7 +446,9 @@ export function useMultiplayerGame() {
     const activePlayerIndex =
       gameState.phase === 'DUEL_ROLL' || gameState.phase === 'DUEL_RESULT'
         ? gameState.duel?.attackerPlayerIndex ?? gameState.currentTurn
-        : gameState.currentTurn;
+        : gameState.phase === 'ACTIVITY_RESULT'
+          ? gameState.activity?.playerIndex ?? gameState.currentTurn
+          : gameState.currentTurn;
 
     const activePlayer = gameState.players[activePlayerIndex];
     if (!activePlayer || activePlayer.seatType !== 'bot') return;
@@ -418,11 +456,13 @@ export function useMultiplayerGame() {
     const delayMs =
       gameState.phase === 'DUEL_RESULT'
         ? 2200
-        : gameState.phase === 'DUEL_ROLL'
-          ? 1250
-          : gameState.phase === 'SELECT_PAWN'
-            ? 1150
-            : 1000;
+        : gameState.phase === 'ACTIVITY_RESULT'
+          ? 1900
+          : gameState.phase === 'DUEL_ROLL'
+            ? 1250
+            : gameState.phase === 'SELECT_PAWN'
+              ? 1150
+              : 1000;
 
     const timer = window.setTimeout(() => {
       if (gameState.phase === 'WAIT_ROLL') {
@@ -436,6 +476,8 @@ export function useMultiplayerGame() {
         dispatchAction({ type: 'DUEL_ROLL', playerIndex: activePlayerIndex });
       } else if (gameState.phase === 'DUEL_RESULT') {
         dispatchAction({ type: 'ACK_DUEL', playerIndex: activePlayerIndex });
+      } else if (gameState.phase === 'ACTIVITY_RESULT') {
+        dispatchAction({ type: 'ACK_ACTIVITY', playerIndex: activePlayerIndex });
       }
     }, delayMs);
 
@@ -467,6 +509,7 @@ export function useMultiplayerGame() {
     setGuestConnecting(false);
     setGuestError(null);
     setLobbyRoster(null);
+    setLobbySettings(null);
     setGameState(null);
   };
 
@@ -509,14 +552,19 @@ export function useMultiplayerGame() {
       return p;
     });
     setPlayers(resolvedPlayers);
-    const initial = createInitialState(resolvedPlayers);
+    const initial = createInitialState(resolvedPlayers, settings);
     setGameState(initial);
     broadcastAll({ kind: 'STATE_SYNC', state: initial });
   };
 
   const updatePlayers = (nextPlayers: PlayerConfig[]) => {
     setPlayers(nextPlayers);
-    broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+    broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
+  };
+
+  const updateSettings = (nextSettings: GameSettings) => {
+    setSettings(nextSettings);
+    broadcastAll({ kind: 'LOBBY_SYNC', players: playersRef.current, settings: nextSettings });
   };
 
   const updateGuestName = (name: string) => {
@@ -553,6 +601,8 @@ export function useMultiplayerGame() {
 
   return {
     players,
+    settings,
+    lobbySettings,
     gameState,
     isGuest,
     guestSeat,
@@ -570,6 +620,7 @@ export function useMultiplayerGame() {
     guestError,
     lobbyRoster,
     updatePlayers,
+    updateSettings,
     updateGuestName,
     updateGuestMajor,
     updateGuestEmoji,

@@ -1,5 +1,16 @@
-import { START_INDEX_BY_COLOR, stepsFromStart } from './boardGeometry';
-import type { DuelState, GameLogEntry, GameState, Pawn, PawnLocation, PlayerConfig } from './types';
+import { ACTIVITY_TILE_MAP, START_INDEX_BY_COLOR, stepsFromStart } from './boardGeometry';
+import type {
+  ActivityState,
+  ActivityType,
+  DuelState,
+  GameLogEntry,
+  GameSettings,
+  GameState,
+  Pawn,
+  PawnLocation,
+  PendingPostDuelEvent,
+  PlayerConfig,
+} from './types';
 
 export type RngFn = () => number;
 
@@ -7,7 +18,10 @@ export function rollD6(rng: RngFn = Math.random): number {
   return Math.floor(rng() * 6) + 1;
 }
 
-export function createInitialState(players: PlayerConfig[]): GameState {
+export function createInitialState(
+  players: PlayerConfig[],
+  settings: GameSettings = { hardcore: false, duelMode: 'classic' }
+): GameState {
   const activePlayers = players.filter((p) => p.active);
   if (activePlayers.length < 2 || activePlayers.length > 4) {
     throw new Error('Game requires between 2 and 4 active players.');
@@ -32,12 +46,20 @@ export function createInitialState(players: PlayerConfig[]): GameState {
   return {
     players,
     pawns,
+    settings: {
+      hardcore: settings.hardcore,
+      duelMode: settings.duelMode ?? 'classic',
+    },
     currentTurn: firstTurn,
     phase: 'WAIT_ROLL',
     lastRoll: null,
     rollAttemptsInBase: 0,
+    consecutiveSixes: 0,
+    skippedTurns: {},
     legalPawnIds: [],
     duel: null,
+    activity: null,
+    queuedEvents: [],
     winnerIndex: null,
     eventLog: [],
     nextLogId: 1,
@@ -62,6 +84,41 @@ export function nextActivePlayerIndex(players: PlayerConfig[], current: number):
     if (players[idx].active) return idx;
   }
   return current;
+}
+
+function advanceTurnCheckingSkips(
+  state: GameState,
+  fromPlayerIndex: number
+): {
+  currentTurn: number;
+  skippedTurns: Record<number, number>;
+  eventLog: GameLogEntry[];
+  nextLogId: number;
+} {
+  const nextSkipped = { ...state.skippedTurns };
+  let eventLog = state.eventLog;
+  let nextLogId = state.nextLogId;
+  let candidate = nextActivePlayerIndex(state.players, fromPlayerIndex);
+
+  for (let i = 0; i < state.players.length; i++) {
+    const skips = nextSkipped[candidate] ?? 0;
+    if (skips > 0) {
+      nextSkipped[candidate] = skips - 1;
+      const logged = addLog({ ...state, eventLog, nextLogId }, { type: 'turn_skipped', playerIndex: candidate });
+      eventLog = logged.eventLog;
+      nextLogId = logged.nextLogId;
+      candidate = nextActivePlayerIndex(state.players, candidate);
+    } else {
+      break;
+    }
+  }
+
+  return {
+    currentTurn: candidate,
+    skippedTurns: nextSkipped,
+    eventLog,
+    nextLogId,
+  };
 }
 
 export function allPawnsInBase(pawns: Pawn[], playerIndex: number): boolean {
@@ -174,6 +231,73 @@ export function rollDice(state: GameState, rng: RngFn = Math.random): GameState 
 
   const playerIndex = state.currentTurn;
   const dice = rollD6(rng);
+  const nextConsecutiveSixes =
+    state.settings.hardcore && dice === 6 ? state.consecutiveSixes + 1 : 0;
+
+  // Hardcore 6-6-6 Sudden Death: 50% instant win, 50% all pawns exmatriculated to base
+  if (state.settings.hardcore && nextConsecutiveSixes >= 3) {
+    const win = rng() < 0.5;
+    if (win) {
+      const log = addLog(state, {
+        type: 'activity_good',
+        playerIndex,
+        detail: 'tripleSix',
+      });
+      return {
+        ...state,
+        lastRoll: dice,
+        rollAttemptsInBase: 0,
+        consecutiveSixes: 0,
+        legalPawnIds: [],
+        phase: 'ACTIVITY_RESULT',
+        activity: {
+          type: 'tripleSix',
+          playerIndex,
+          pawnId: '',
+          outcome: 'good',
+          stepDelta: 0,
+          skipTurn: false,
+          bonusRoll: false,
+          winGame: true,
+          hadSix: false,
+        },
+        ...log,
+      };
+    }
+
+    const resetPawns = state.pawns.map((p) =>
+      p.playerIndex === playerIndex
+        ? { ...p, location: { zone: 'base' as const, slot: p.pawnNumber } }
+        : p
+    );
+    const log = addLog(state, {
+      type: 'activity_bad',
+      playerIndex,
+      detail: 'tripleSix',
+    });
+    return {
+      ...state,
+      pawns: resetPawns,
+      lastRoll: dice,
+      rollAttemptsInBase: 0,
+      consecutiveSixes: 0,
+      legalPawnIds: [],
+      phase: 'ACTIVITY_RESULT',
+      activity: {
+        type: 'tripleSix',
+        playerIndex,
+        pawnId: '',
+        outcome: 'bad',
+        stepDelta: 0,
+        skipTurn: false,
+        bonusRoll: false,
+        exmatriculateAll: true,
+        hadSix: false,
+      },
+      ...log,
+    };
+  }
+
   const legalPawnIds = getLegalPawnIds(state, playerIndex, dice);
 
   if (legalPawnIds.length > 0) {
@@ -181,6 +305,7 @@ export function rollDice(state: GameState, rng: RngFn = Math.random): GameState 
       ...state,
       lastRoll: dice,
       rollAttemptsInBase: 0,
+      consecutiveSixes: nextConsecutiveSixes,
       legalPawnIds,
       phase: 'SELECT_PAWN',
     };
@@ -193,22 +318,23 @@ export function rollDice(state: GameState, rng: RngFn = Math.random): GameState 
       ...state,
       lastRoll: dice,
       rollAttemptsInBase: state.rollAttemptsInBase + 1,
+      consecutiveSixes: nextConsecutiveSixes,
       legalPawnIds: [],
       phase: 'WAIT_ROLL',
     };
   }
 
-  // Turn passes to next active player (unless they rolled a 6 and somehow had no legal moves, still pass)
-  const nextTurn = nextActivePlayerIndex(state.players, playerIndex);
-  const log = addLog(state, { type: 'turn', playerIndex });
+  // Turn passes to next active player
+  const logged = addLog(state, { type: 'turn', playerIndex });
+  const advanced = advanceTurnCheckingSkips({ ...state, ...logged }, playerIndex);
   return {
     ...state,
     lastRoll: dice,
     rollAttemptsInBase: 0,
+    consecutiveSixes: 0,
     legalPawnIds: [],
-    currentTurn: nextTurn,
     phase: 'WAIT_ROLL',
-    ...log,
+    ...advanced,
   };
 }
 
@@ -224,7 +350,87 @@ function findOpenBaseSlot(pawns: Pawn[], playerIndex: number): number {
   return 0;
 }
 
-export function selectPawn(state: GameState, pawnId: string): GameState {
+function computeActivityDestination(
+  pawn: Pawn,
+  stepDelta: number,
+  allPawns: Pawn[]
+): PawnLocation {
+  if (pawn.location.zone !== 'track' || stepDelta === 0) {
+    return pawn.location;
+  }
+
+  const ownPawns = allPawns.filter((p) => p.playerIndex === pawn.playerIndex && p.id !== pawn.id);
+  const traveled = stepsFromStart(pawn.color, pawn.location.index);
+
+  if (stepDelta > 0) {
+    for (let d = stepDelta; d >= 1; d--) {
+      const nextSteps = traveled + d;
+      if (nextSteps < 40) {
+        const targetIndex = (START_INDEX_BY_COLOR[pawn.color] + nextSteps) % 40;
+        const ownAtTarget = ownPawns.some(
+          (p) => p.location.zone === 'track' && p.location.index === targetIndex
+        );
+        if (!ownAtTarget) {
+          return { zone: 'track', index: targetIndex };
+        }
+      } else {
+        const goalSlot = nextSteps - 40;
+        if (goalSlot <= 3) {
+          const blockedInGoal = ownPawns.some(
+            (p) => p.location.zone === 'goal' && p.location.slot <= goalSlot
+          );
+          if (!blockedInGoal) {
+            return { zone: 'goal', slot: goalSlot };
+          }
+        }
+      }
+    }
+    return pawn.location;
+  }
+
+  // Negative stepDelta: clamp at 0 (start tile), step toward current position if own pawn blocks
+  const minSteps = Math.max(0, traveled + stepDelta);
+  for (let s = minSteps; s < traveled; s++) {
+    const targetIndex = (START_INDEX_BY_COLOR[pawn.color] + s) % 40;
+    const ownAtTarget = ownPawns.some(
+      (p) => p.location.zone === 'track' && p.location.index === targetIndex
+    );
+    if (!ownAtTarget) {
+      return { zone: 'track', index: targetIndex };
+    }
+  }
+  return pawn.location;
+}
+
+function buildActivityOutcome(
+  type: Exclude<ActivityType, 'tripleSix'>,
+  isGood: boolean
+): { stepDelta: number; skipTurn: boolean; bonusRoll: boolean } {
+  switch (type) {
+    case 'mensa':
+      return isGood
+        ? { stepDelta: 3, skipTurn: false, bonusRoll: false }
+        : { stepDelta: 0, skipTurn: true, bonusRoll: false };
+    case 'bib':
+      return isGood
+        ? { stepDelta: 0, skipTurn: false, bonusRoll: true }
+        : { stepDelta: -2, skipTurn: false, bonusRoll: false };
+    case 'examOffice':
+      return isGood
+        ? { stepDelta: 4, skipTurn: false, bonusRoll: false }
+        : { stepDelta: -4, skipTurn: false, bonusRoll: false };
+    case 'party':
+      return isGood
+        ? { stepDelta: 2, skipTurn: false, bonusRoll: true }
+        : { stepDelta: -3, skipTurn: true, bonusRoll: false };
+  }
+}
+
+export function selectPawn(
+  state: GameState,
+  pawnId: string,
+  rng: RngFn = Math.random
+): GameState {
   if (state.phase !== 'SELECT_PAWN' || state.lastRoll === null) return state;
   if (!state.legalPawnIds.includes(pawnId)) return state;
 
@@ -290,6 +496,68 @@ export function selectPawn(state: GameState, pawnId: string): GameState {
     nextLog = addLog(state, { type: 'goal', playerIndex: pawn.playerIndex });
   }
 
+  // Hardcore Mode automatic activity field trigger
+  if (state.settings.hardcore && target.zone === 'track') {
+    const actType = ACTIVITY_TILE_MAP[target.index];
+    if (actType) {
+      const isGood = rng() < 0.5;
+      const effect = buildActivityOutcome(actType, isGood);
+      const movedPawn: Pawn = { ...pawn, location: target };
+      const finalLoc = computeActivityDestination(movedPawn, effect.stepDelta, updatedPawns);
+      const finalPawns = updatedPawns.map((p) =>
+        p.id === pawn.id ? { ...p, location: finalLoc } : p
+      );
+
+      const pendingOpponent =
+        finalLoc.zone === 'track'
+          ? finalPawns.find(
+              (p) =>
+                p.playerIndex !== pawn.playerIndex &&
+                p.location.zone === 'track' &&
+                p.location.index === finalLoc.index
+            )
+          : undefined;
+
+      const nextSkipped = { ...state.skippedTurns };
+      if (effect.skipTurn) {
+        nextSkipped[pawn.playerIndex] = (nextSkipped[pawn.playerIndex] ?? 0) + 1;
+      }
+
+      const actLog = addLog(
+        { ...state, ...nextLog },
+        {
+          type: isGood ? 'activity_good' : 'activity_bad',
+          playerIndex: pawn.playerIndex,
+          detail: actType,
+        }
+      );
+
+      const activity: ActivityState = {
+        type: actType,
+        playerIndex: pawn.playerIndex,
+        pawnId: pawn.id,
+        outcome: isGood ? 'good' : 'bad',
+        stepDelta: effect.stepDelta,
+        skipTurn: effect.skipTurn,
+        bonusRoll: effect.bonusRoll,
+        pendingDuelOpponentId: pendingOpponent?.id,
+        pendingDuelTrackIndex:
+          pendingOpponent && finalLoc.zone === 'track' ? finalLoc.index : undefined,
+        hadSix: dice === 6,
+      };
+
+      return {
+        ...state,
+        pawns: finalPawns,
+        skippedTurns: nextSkipped,
+        legalPawnIds: [],
+        phase: 'ACTIVITY_RESULT',
+        activity,
+        ...actLog,
+      };
+    }
+  }
+
   // Check victory
   if (allPawnsInGoal(updatedPawns, pawn.playerIndex)) {
     const winLog = addLog(
@@ -306,18 +574,203 @@ export function selectPawn(state: GameState, pawnId: string): GameState {
     };
   }
 
-  const nextTurn =
-    dice === 6 ? pawn.playerIndex : nextActivePlayerIndex(state.players, pawn.playerIndex);
+  if (dice === 6) {
+    return {
+      ...state,
+      pawns: updatedPawns,
+      legalPawnIds: [],
+      currentTurn: pawn.playerIndex,
+      phase: 'WAIT_ROLL',
+      rollAttemptsInBase: 0,
+      ...nextLog,
+    };
+  }
 
+  const advanced = advanceTurnCheckingSkips({ ...state, ...nextLog }, pawn.playerIndex);
   return {
     ...state,
     pawns: updatedPawns,
     legalPawnIds: [],
-    currentTurn: nextTurn,
+    consecutiveSixes: 0,
     phase: 'WAIT_ROLL',
     rollAttemptsInBase: 0,
-    ...nextLog,
+    ...advanced,
   };
+}
+
+function computePushDestination(
+  pawn: Pawn,
+  delta: number,
+  allPawns: Pawn[]
+): { location: PawnLocation; movedSteps: number } {
+  if (pawn.location.zone !== 'track' || delta === 0) {
+    return { location: pawn.location, movedSteps: 0 };
+  }
+
+  const ownPawns = allPawns.filter((p) => p.playerIndex === pawn.playerIndex && p.id !== pawn.id);
+  const traveled = stepsFromStart(pawn.color, pawn.location.index);
+
+  if (delta > 0) {
+    const maxSteps = Math.min(43, traveled + delta);
+    if (maxSteps >= 40) {
+      const maxGoalSlot = maxSteps - 40;
+      for (let slot = maxGoalSlot; slot >= 0; slot--) {
+        const blockedInGoal = ownPawns.some(
+          (p) => p.location.zone === 'goal' && p.location.slot <= slot
+        );
+        if (!blockedInGoal) {
+          return {
+            location: { zone: 'goal', slot },
+            movedSteps: 40 + slot - traveled,
+          };
+        }
+      }
+    }
+
+    const maxTrackSteps = Math.min(39, maxSteps);
+    for (let s = maxTrackSteps; s >= traveled; s--) {
+      const targetIndex = (START_INDEX_BY_COLOR[pawn.color] + s) % 40;
+      const ownAtTarget = ownPawns.some(
+        (p) => p.location.zone === 'track' && p.location.index === targetIndex
+      );
+      if (!ownAtTarget) {
+        return {
+          location: { zone: 'track', index: targetIndex },
+          movedSteps: s - traveled,
+        };
+      }
+    }
+    return { location: pawn.location, movedSteps: 0 };
+  }
+
+  const minSteps = Math.max(0, traveled + delta);
+  for (let s = minSteps; s <= traveled; s++) {
+    const targetIndex = (START_INDEX_BY_COLOR[pawn.color] + s) % 40;
+    const ownAtTarget = ownPawns.some(
+      (p) => p.location.zone === 'track' && p.location.index === targetIndex
+    );
+    if (!ownAtTarget) {
+      return {
+        location: { zone: 'track', index: targetIndex },
+        movedSteps: traveled - s,
+      };
+    }
+  }
+  return { location: pawn.location, movedSteps: 0 };
+}
+
+function triggerHardcoreActivityAtTile(
+  state: GameState,
+  pawn: Pawn,
+  trackIndex: number,
+  hadSix: boolean,
+  rng: RngFn
+): GameState | null {
+  const actType = ACTIVITY_TILE_MAP[trackIndex];
+  if (!actType) return null;
+
+  const isGood = rng() < 0.5;
+  const effect = buildActivityOutcome(actType, isGood);
+  const movedPawn: Pawn = { ...pawn, location: { zone: 'track', index: trackIndex } };
+  const finalLoc = computeActivityDestination(movedPawn, effect.stepDelta, state.pawns);
+  const finalPawns = state.pawns.map((p) =>
+    p.id === pawn.id ? { ...p, location: finalLoc } : p
+  );
+
+  const pendingOpponent =
+    finalLoc.zone === 'track'
+      ? finalPawns.find(
+          (p) =>
+            p.playerIndex !== pawn.playerIndex &&
+            p.location.zone === 'track' &&
+            p.location.index === finalLoc.index
+        )
+      : undefined;
+
+  const nextSkipped = { ...state.skippedTurns };
+  if (effect.skipTurn) {
+    nextSkipped[pawn.playerIndex] = (nextSkipped[pawn.playerIndex] ?? 0) + 1;
+  }
+
+  const actLog = addLog(state, {
+    type: isGood ? 'activity_good' : 'activity_bad',
+    playerIndex: pawn.playerIndex,
+    detail: actType,
+  });
+
+  const activity: ActivityState = {
+    type: actType,
+    playerIndex: pawn.playerIndex,
+    pawnId: pawn.id,
+    outcome: isGood ? 'good' : 'bad',
+    stepDelta: effect.stepDelta,
+    skipTurn: effect.skipTurn,
+    bonusRoll: effect.bonusRoll,
+    pendingDuelOpponentId: pendingOpponent?.id,
+    pendingDuelTrackIndex:
+      pendingOpponent && finalLoc.zone === 'track' ? finalLoc.index : undefined,
+    hadSix,
+  };
+
+  return {
+    ...state,
+    pawns: finalPawns,
+    skippedTurns: nextSkipped,
+    legalPawnIds: [],
+    phase: 'ACTIVITY_RESULT',
+    activity,
+    ...actLog,
+  };
+}
+
+function processNextQueuedEvent(state: GameState, rng: RngFn): GameState | null {
+  const queue = [...(state.queuedEvents ?? [])];
+  while (queue.length > 0) {
+    const nextEvt = queue.shift()!;
+    if (nextEvt.kind === 'duel') {
+      const attacker = state.pawns.find((p) => p.id === nextEvt.attackerPawnId);
+      const defender = state.pawns.find((p) => p.id === nextEvt.defenderPawnId);
+      if (
+        attacker &&
+        defender &&
+        attacker.location.zone === 'track' &&
+        defender.location.zone === 'track' &&
+        attacker.location.index === nextEvt.trackIndex &&
+        defender.location.index === nextEvt.trackIndex
+      ) {
+        const duel: DuelState = {
+          attackerPlayerIndex: nextEvt.attackerPlayerIndex,
+          attackerPawnId: nextEvt.attackerPawnId,
+          defenderPlayerIndex: nextEvt.defenderPlayerIndex,
+          defenderPawnId: nextEvt.defenderPawnId,
+          contestedTrackIndex: nextEvt.trackIndex,
+          rounds: [],
+          winner: null,
+          attackerHadSix: nextEvt.hadSix,
+        };
+        return {
+          ...state,
+          duel,
+          activity: null,
+          queuedEvents: queue,
+          phase: 'DUEL_ROLL',
+        };
+      }
+    } else if (nextEvt.kind === 'activity') {
+      const pawn = state.pawns.find((p) => p.id === nextEvt.pawnId);
+      if (pawn && pawn.location.zone === 'track' && pawn.location.index === nextEvt.trackIndex) {
+        const actState = triggerHardcoreActivityAtTile(
+          { ...state, duel: null, queuedEvents: queue },
+          pawn,
+          nextEvt.trackIndex,
+          nextEvt.hadSix,
+          rng
+        );
+        if (actState) return actState;
+      }
+    }
+  }
+  return null;
 }
 
 export function resolveDuelRoll(state: GameState, rng: RngFn = Math.random): GameState {
@@ -348,6 +801,112 @@ export function resolveDuelRoll(state: GameState, rng: RngFn = Math.random): Gam
     winner === 'attacker' ? state.duel.defenderPawnId : state.duel.attackerPawnId;
   const winnerPlayerIndex =
     winner === 'attacker' ? state.duel.attackerPlayerIndex : state.duel.defenderPlayerIndex;
+  const winnerPawnId =
+    winner === 'attacker' ? state.duel.attackerPawnId : state.duel.defenderPawnId;
+
+  if (state.settings.duelMode === 'push') {
+    const attackerSum = rounds.reduce((acc, r) => acc + r.attackerRoll, 0);
+    const defenderSum = rounds.reduce((acc, r) => acc + r.defenderRoll, 0);
+    const winnerSum = winner === 'attacker' ? attackerSum : defenderSum;
+    const loserSum = winner === 'attacker' ? defenderSum : attackerSum;
+
+    const loserPawn = state.pawns.find((p) => p.id === loserPawnId)!;
+    const loserPush = computePushDestination(loserPawn, -winnerSum, state.pawns);
+    let updatedPawns = state.pawns.map((p) =>
+      p.id === loserPawnId ? { ...p, location: loserPush.location } : p
+    );
+
+    const winnerPawn = updatedPawns.find((p) => p.id === winnerPawnId)!;
+    const winnerPush = computePushDestination(winnerPawn, loserSum, updatedPawns);
+    updatedPawns = updatedPawns.map((p) =>
+      p.id === winnerPawnId ? { ...p, location: winnerPush.location } : p
+    );
+
+    const newEvents: PendingPostDuelEvent[] = [];
+    if (winnerPush.location.zone === 'track') {
+      const winnerTrackIdx = winnerPush.location.index;
+      const opp = updatedPawns.find(
+        (p) =>
+          p.playerIndex !== winnerPlayerIndex &&
+          p.location.zone === 'track' &&
+          p.location.index === winnerTrackIdx
+      );
+      if (opp) {
+        newEvents.push({
+          kind: 'duel',
+          attackerPlayerIndex: winnerPlayerIndex,
+          attackerPawnId: winnerPawnId,
+          defenderPlayerIndex: opp.playerIndex,
+          defenderPawnId: opp.id,
+          trackIndex: winnerTrackIdx,
+          hadSix: false,
+        });
+      } else if (state.settings.hardcore && ACTIVITY_TILE_MAP[winnerTrackIdx]) {
+        newEvents.push({
+          kind: 'activity',
+          playerIndex: winnerPlayerIndex,
+          pawnId: winnerPawnId,
+          trackIndex: winnerTrackIdx,
+          hadSix: false,
+        });
+      }
+    }
+
+    if (loserPush.location.zone === 'track') {
+      const loserTrackIdx = loserPush.location.index;
+      const opp = updatedPawns.find(
+        (p) =>
+          p.playerIndex !== loserPlayerIndex &&
+          p.location.zone === 'track' &&
+          p.location.index === loserTrackIdx
+      );
+      if (opp) {
+        newEvents.push({
+          kind: 'duel',
+          attackerPlayerIndex: loserPlayerIndex,
+          attackerPawnId: loserPawnId,
+          defenderPlayerIndex: opp.playerIndex,
+          defenderPawnId: opp.id,
+          trackIndex: loserTrackIdx,
+          hadSix: false,
+        });
+      } else if (state.settings.hardcore && ACTIVITY_TILE_MAP[loserTrackIdx]) {
+        newEvents.push({
+          kind: 'activity',
+          playerIndex: loserPlayerIndex,
+          pawnId: loserPawnId,
+          trackIndex: loserTrackIdx,
+          hadSix: false,
+        });
+      }
+    }
+
+    const log = addLog(state, {
+      type: 'duel_win',
+      playerIndex: winnerPlayerIndex,
+      opponentIndex: loserPlayerIndex,
+      detail: `${attackerSum}:${defenderSum}`,
+    });
+
+    return {
+      ...state,
+      pawns: updatedPawns,
+      phase: 'DUEL_RESULT',
+      turnOwnerAfterQueue: state.turnOwnerAfterQueue ?? state.duel.attackerPlayerIndex,
+      turnHadSixAfterQueue: state.turnHadSixAfterQueue ?? state.duel.attackerHadSix,
+      queuedEvents: [...newEvents, ...(state.queuedEvents ?? [])],
+      duel: {
+        ...state.duel,
+        rounds,
+        winner,
+        winnerSum,
+        loserSum,
+        winnerMoved: winnerPush.movedSteps,
+        loserMoved: loserPush.movedSteps,
+      },
+      ...log,
+    };
+  }
 
   const openSlot = findOpenBaseSlot(state.pawns, loserPlayerIndex);
   const updatedPawns = state.pawns.map((p) =>
@@ -374,19 +933,136 @@ export function resolveDuelRoll(state: GameState, rng: RngFn = Math.random): Gam
   };
 }
 
-export function acknowledgeDuel(state: GameState): GameState {
+export function acknowledgeDuel(state: GameState, rng: RngFn = Math.random): GameState {
   if (state.phase !== 'DUEL_RESULT' || !state.duel) return state;
 
-  const { attackerPlayerIndex, attackerHadSix } = state.duel;
-  const nextTurn = attackerHadSix
-    ? attackerPlayerIndex
-    : nextActivePlayerIndex(state.players, attackerPlayerIndex);
+  const turnOwner = state.turnOwnerAfterQueue ?? state.duel.attackerPlayerIndex;
+  const turnHadSix = state.turnHadSixAfterQueue ?? state.duel.attackerHadSix;
 
+  // Check if any player won via push into goal
+  for (let idx = 0; idx < state.players.length; idx++) {
+    if (state.players[idx].active && allPawnsInGoal(state.pawns, idx)) {
+      const winLog = addLog(state, { type: 'win', playerIndex: idx });
+      return {
+        ...state,
+        duel: null,
+        queuedEvents: [],
+        turnOwnerAfterQueue: undefined,
+        turnHadSixAfterQueue: undefined,
+        phase: 'GAME_OVER',
+        winnerIndex: idx,
+        ...winLog,
+      };
+    }
+  }
+
+  // Process any queued chain duel or Hardcore activity
+  const queuedNext = processNextQueuedEvent(
+    { ...state, turnOwnerAfterQueue: turnOwner, turnHadSixAfterQueue: turnHadSix },
+    rng
+  );
+  if (queuedNext) {
+    return queuedNext;
+  }
+
+  if (turnHadSix) {
+    return {
+      ...state,
+      duel: null,
+      queuedEvents: [],
+      turnOwnerAfterQueue: undefined,
+      turnHadSixAfterQueue: undefined,
+      currentTurn: turnOwner,
+      phase: 'WAIT_ROLL',
+      rollAttemptsInBase: 0,
+    };
+  }
+
+  const advanced = advanceTurnCheckingSkips(state, turnOwner);
   return {
     ...state,
     duel: null,
-    currentTurn: nextTurn,
+    queuedEvents: [],
+    turnOwnerAfterQueue: undefined,
+    turnHadSixAfterQueue: undefined,
+    consecutiveSixes: 0,
     phase: 'WAIT_ROLL',
     rollAttemptsInBase: 0,
+    ...advanced,
+  };
+}
+
+export function acknowledgeActivity(state: GameState, rng: RngFn = Math.random): GameState {
+  if (state.phase !== 'ACTIVITY_RESULT' || !state.activity) return state;
+
+  const act = state.activity;
+  const turnOwner = state.turnOwnerAfterQueue ?? act.playerIndex;
+  const turnHadSix = state.turnHadSixAfterQueue ?? (act.hadSix || act.bonusRoll);
+
+  if (act.winGame || allPawnsInGoal(state.pawns, act.playerIndex)) {
+    const winLog = addLog(state, { type: 'win', playerIndex: act.playerIndex });
+    return {
+      ...state,
+      activity: null,
+      queuedEvents: [],
+      turnOwnerAfterQueue: undefined,
+      turnHadSixAfterQueue: undefined,
+      phase: 'GAME_OVER',
+      winnerIndex: act.playerIndex,
+      ...winLog,
+    };
+  }
+
+  if (act.pendingDuelOpponentId && act.pendingDuelTrackIndex !== undefined) {
+    const opponent = state.pawns.find((p) => p.id === act.pendingDuelOpponentId);
+    if (opponent) {
+      const duel: DuelState = {
+        attackerPlayerIndex: act.playerIndex,
+        attackerPawnId: act.pawnId,
+        defenderPlayerIndex: opponent.playerIndex,
+        defenderPawnId: opponent.id,
+        contestedTrackIndex: act.pendingDuelTrackIndex,
+        rounds: [],
+        winner: null,
+        attackerHadSix: turnHadSix,
+      };
+      return {
+        ...state,
+        activity: null,
+        phase: 'DUEL_ROLL',
+        duel,
+      };
+    }
+  }
+
+  const queuedNext = processNextQueuedEvent(state, rng);
+  if (queuedNext) {
+    return queuedNext;
+  }
+
+  if (turnHadSix && !act.skipTurn && !act.exmatriculateAll) {
+    return {
+      ...state,
+      activity: null,
+      queuedEvents: [],
+      turnOwnerAfterQueue: undefined,
+      turnHadSixAfterQueue: undefined,
+      currentTurn: turnOwner,
+      phase: 'WAIT_ROLL',
+      rollAttemptsInBase: 0,
+    };
+  }
+
+  const advanced = advanceTurnCheckingSkips(state, turnOwner);
+  return {
+    ...state,
+    activity: null,
+    queuedEvents: [],
+    turnOwnerAfterQueue: undefined,
+    turnHadSixAfterQueue: undefined,
+    consecutiveSixes: 0,
+    phase: 'WAIT_ROLL',
+    rollAttemptsInBase: 0,
+    ...advanced,
   };
 }

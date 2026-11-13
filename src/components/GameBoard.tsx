@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ACTIVITY_TILE_MAP,
   BASE_COORDS_BY_COLOR,
   GOAL_COORDS_BY_COLOR,
   PLAYER_COLORS,
@@ -7,7 +8,14 @@ import {
   TRACK_COORDS,
   type GridCoord,
 } from '../game/boardGeometry';
-import type { GameState, Language, Pawn, PlayerColor } from '../game/types';
+import type { ActivityType, GameState, Language, Pawn, PlayerColor } from '../game/types';
+
+const ACTIVITY_ICON: Record<Exclude<ActivityType, 'tripleSix'>, string> = {
+  mensa: '🍽️',
+  bib: '☕',
+  examOffice: '📝',
+  party: '🍺',
+};
 
 interface GameBoardProps {
   state: GameState;
@@ -194,6 +202,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           const { x, y } = cellCenter(coord);
           const startColor = startTileColors.get(idx);
           const isContested = state.duel?.contestedTrackIndex === idx;
+          const activityType = state.settings.hardcore ? ACTIVITY_TILE_MAP[idx] : undefined;
 
           return (
             <g key={`track-${idx}`}>
@@ -201,10 +210,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 cx={x}
                 cy={y}
                 r="41"
-                fill={startColor ? COLOR_HEX[startColor] : '#d3d3d3'}
-                stroke="#000000"
+                fill={startColor ? COLOR_HEX[startColor] : activityType ? '#fff4d4' : '#d3d3d3'}
+                stroke={activityType ? '#b72b22' : '#000000'}
                 strokeWidth="3.5"
+                strokeDasharray={activityType ? '6 3' : undefined}
               />
+              {activityType && (
+                <text
+                  x={x}
+                  y={y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="36"
+                  pointerEvents="none"
+                >
+                  {ACTIVITY_ICON[activityType]}
+                </text>
+              )}
               {startColor && (
                 <>
                   <circle

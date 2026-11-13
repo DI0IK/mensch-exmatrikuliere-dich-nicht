@@ -31,7 +31,50 @@ export type TurnPhase =
   | 'SELECT_PAWN'
   | 'DUEL_ROLL'
   | 'DUEL_RESULT'
+  | 'ACTIVITY_RESULT'
   | 'GAME_OVER';
+
+export type ActivityType = 'mensa' | 'bib' | 'examOffice' | 'party' | 'tripleSix';
+
+export type DuelMode = 'classic' | 'push';
+
+export interface GameSettings {
+  hardcore: boolean;
+  duelMode?: DuelMode;
+}
+
+export type PendingPostDuelEvent =
+  | {
+      kind: 'duel';
+      attackerPlayerIndex: number;
+      attackerPawnId: string;
+      defenderPlayerIndex: number;
+      defenderPawnId: string;
+      trackIndex: number;
+      hadSix: boolean;
+    }
+  | {
+      kind: 'activity';
+      playerIndex: number;
+      pawnId: string;
+      trackIndex: number;
+      hadSix: boolean;
+    };
+
+export interface ActivityState {
+  type: ActivityType;
+  playerIndex: number;
+  pawnId: string;
+  outcome: 'good' | 'bad';
+  stepDelta: number;
+  skipTurn: boolean;
+  bonusRoll: boolean;
+  winGame?: boolean;
+  exmatriculateAll?: boolean;
+  pendingDuelOpponentId?: string;
+  pendingDuelTrackIndex?: number;
+  hadSix: boolean;
+}
 
 export interface DuelRound {
   attackerRoll: number;
@@ -47,11 +90,25 @@ export interface DuelState {
   rounds: DuelRound[];
   winner: 'attacker' | 'defender' | null;
   attackerHadSix: boolean;
+  winnerSum?: number;
+  loserSum?: number;
+  winnerMoved?: number;
+  loserMoved?: number;
 }
 
 export interface GameLogEntry {
   id: number;
-  type: 'immatrikulation' | 'exmatrikulation' | 'duel_tie' | 'duel_win' | 'goal' | 'turn' | 'win';
+  type:
+    | 'immatrikulation'
+    | 'exmatrikulation'
+    | 'duel_tie'
+    | 'duel_win'
+    | 'goal'
+    | 'turn'
+    | 'activity_good'
+    | 'activity_bad'
+    | 'turn_skipped'
+    | 'win';
   playerIndex: number;
   opponentIndex?: number;
   detail?: string;
@@ -60,12 +117,19 @@ export interface GameLogEntry {
 export interface GameState {
   players: PlayerConfig[];
   pawns: Pawn[];
+  settings: GameSettings;
   currentTurn: number; // index into players[]
   phase: TurnPhase;
   lastRoll: number | null;
   rollAttemptsInBase: number; // 0..3 when all pawns are in base
+  consecutiveSixes: number; // 0..3 for Hardcore 6-6-6 rule
+  skippedTurns: Record<number, number>;
   legalPawnIds: string[];
   duel: DuelState | null;
+  activity: ActivityState | null;
+  queuedEvents?: PendingPostDuelEvent[];
+  turnOwnerAfterQueue?: number;
+  turnHadSixAfterQueue?: boolean;
   winnerIndex: number | null;
   eventLog: GameLogEntry[];
   nextLogId: number;
@@ -75,4 +139,5 @@ export type GameAction =
   | { type: 'ROLL_DICE'; playerIndex: number }
   | { type: 'SELECT_PAWN'; playerIndex: number; pawnId: string }
   | { type: 'DUEL_ROLL'; playerIndex: number }
-  | { type: 'ACK_DUEL'; playerIndex: number };
+  | { type: 'ACK_DUEL'; playerIndex: number }
+  | { type: 'ACK_ACTIVITY'; playerIndex: number };
