@@ -260,7 +260,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         display: 'inline-block',
                       }}
                     />
-                    {t.lobbyCodeTitle}
+                    {language === 'de' ? 'Einladen' : 'Invite'}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -363,7 +363,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                     color: 'var(--ink-muted)',
                   }}
                 >
-                  {t.lobbyCodeJoinLabel}
+                  {language === 'de' ? 'Beitreten' : 'Join'}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input
@@ -389,7 +389,15 @@ export const Lobby: React.FC<LobbyProps> = ({
                   <button
                     type="button"
                     className="tactile-btn primary"
-                    style={{ padding: '8px 14px', fontSize: '0.84rem', whiteSpace: 'nowrap' }}
+                    aria-label={guestConnecting ? t.lobbyCodeConnecting : t.lobbyCodeJoinBtn}
+                    title={guestConnecting ? t.lobbyCodeConnecting : t.lobbyCodeJoinBtn}
+                    style={{
+                      padding: '8px 10px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1,
+                    }}
                     disabled={
                       !roomCodeInput.trim() ||
                       guestConnecting ||
@@ -400,7 +408,15 @@ export const Lobby: React.FC<LobbyProps> = ({
                     }
                     onClick={() => onGuestJoinRoom(roomCodeInput)}
                   >
-                    {guestConnecting ? t.lobbyCodeConnecting : t.lobbyCodeJoinBtn}
+                    {guestConnecting ? (
+                      <span style={{ fontSize: '0.88rem', lineHeight: 1, width: 16, textAlign: 'center' }}>…</span>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                        <polyline points="10 17 15 12 10 7" />
+                        <line x1="15" y1="12" x2="3" y2="12" />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 {hostLobbyCode &&
