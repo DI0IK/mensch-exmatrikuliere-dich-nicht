@@ -6,13 +6,35 @@ import {
   acknowledgeActivity,
   acknowledgeDuel,
   createInitialState,
-  resolveDuelRoll,
   rollDice,
+  rollDuelDie,
   selectPawn,
 } from '../game/engine';
+import { DEFAULT_GAME_SETTINGS } from '../game/modes';
 import type { GameAction, GameSettings, GameState, PlayerConfig } from '../game/types';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
+
+const USERNAME_STORAGE_KEY = 'medn_username';
+
+function loadSavedUsername(): string | null {
+  try {
+    const saved = window.localStorage.getItem(USERNAME_STORAGE_KEY)?.trim().slice(0, 18);
+    return saved || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveUsername(name: string): void {
+  const clean = name.trim().slice(0, 18);
+  if (!clean) return;
+  try {
+    window.localStorage.setItem(USERNAME_STORAGE_KEY, clean);
+  } catch {
+    // ignore storage errors
+  }
+}
 
 const DEFAULT_PLAYERS: PlayerConfig[] = [
   { color: 'rot', name: 'Studi 1', seatType: 'human-local', active: true, major: 'Informatik', emoji: '💻' },
@@ -81,8 +103,12 @@ function playTransitionSounds(prev: GameState | null, next: GameState): void {
 }
 
 export function useMultiplayerGame() {
-  const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
-  const [settings, setSettings] = useState<GameSettings>({ hardcore: false, duelMode: 'classic' });
+  const [players, setPlayers] = useState<PlayerConfig[]>(() => {
+    const saved = loadSavedUsername();
+    if (!saved) return DEFAULT_PLAYERS;
+    return DEFAULT_PLAYERS.map((p, idx) => (idx === 0 ? { ...p, name: saved } : p));
+  });
+  const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [lobbySettings, setLobbySettings] = useState<GameSettings | null>(null);
@@ -99,7 +125,7 @@ export function useMultiplayerGame() {
 
   // Guest P2P state
   const [initialRoomCode] = useState<string>(() => extractHashParam('#room='));
-  const [guestName, setGuestName] = useState('Gast-Studi');
+  const [guestName, setGuestName] = useState(() => loadSavedUsername() ?? 'Gast-Studi');
   const guestNameRef = useRef(guestName);
   guestNameRef.current = guestName;
   const [guestMajor, setGuestMajor] = useState('');
@@ -138,7 +164,8 @@ export function useMultiplayerGame() {
         if (
           (prev.phase === 'DUEL_ROLL' || prev.phase === 'DUEL_RESULT') &&
           prev.duel &&
-          action.playerIndex !== prev.duel.attackerPlayerIndex
+          action.playerIndex !== prev.duel.attackerPlayerIndex &&
+          action.playerIndex !== prev.duel.defenderPlayerIndex
         ) {
           return prev;
         }
@@ -168,7 +195,7 @@ export function useMultiplayerGame() {
             break;
           case 'DUEL_ROLL':
             sound.playDiceRoll();
-            next = resolveDuelRoll(prev);
+            next = rollDuelDie(prev, action.playerIndex);
             if (next.phase === 'DUEL_RESULT') {
               sound.playStampThud();
             }
@@ -443,12 +470,24 @@ export function useMultiplayerGame() {
   useEffect(() => {
     if (isGuest || !gameState || gameState.phase === 'GAME_OVER') return;
 
-    const activePlayerIndex =
-      gameState.phase === 'DUEL_ROLL' || gameState.phase === 'DUEL_RESULT'
-        ? gameState.duel?.attackerPlayerIndex ?? gameState.currentTurn
-        : gameState.phase === 'ACTIVITY_RESULT'
-          ? gameState.activity?.playerIndex ?? gameState.currentTurn
-          : gameState.currentTurn;
+    let activePlayerIndex = gameState.currentTurn;
+    if (gameState.phase === 'DUEL_ROLL' && gameState.duel) {
+      const { attackerPlayerIndex, defenderPlayerIndex, pendingAttackerRoll, pendingDefenderRoll } =
+        gameState.duel;
+      const attackerIsBot = gameState.players[attackerPlayerIndex]?.seatType === 'bot';
+      const defenderIsBot = gameState.players[defenderPlayerIndex]?.seatType === 'bot';
+      if (attackerIsBot && pendingAttackerRoll === null) {
+        activePlayerIndex = attackerPlayerIndex;
+      } else if (defenderIsBot && pendingDefenderRoll === null) {
+        activePlayerIndex = defenderPlayerIndex;
+      } else {
+        return;
+      }
+    } else if (gameState.phase === 'DUEL_RESULT') {
+      activePlayerIndex = gameState.duel?.attackerPlayerIndex ?? gameState.currentTurn;
+    } else if (gameState.phase === 'ACTIVITY_RESULT') {
+      activePlayerIndex = gameState.activity?.playerIndex ?? gameState.currentTurn;
+    }
 
     const activePlayer = gameState.players[activePlayerIndex];
     if (!activePlayer || activePlayer.seatType !== 'bot') return;
@@ -559,6 +598,9 @@ export function useMultiplayerGame() {
 
   const updatePlayers = (nextPlayers: PlayerConfig[]) => {
     setPlayers(nextPlayers);
+    if (nextPlayers[0]?.name) {
+      saveUsername(nextPlayers[0].name);
+    }
     broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
   };
 
@@ -569,6 +611,7 @@ export function useMultiplayerGame() {
 
   const updateGuestName = (name: string) => {
     setGuestName(name);
+    saveUsername(name);
     if (guestConnected) {
       const clean = name.trim().slice(0, 18);
       if (clean) {

@@ -87,6 +87,8 @@ export interface DuelState {
   defenderPlayerIndex: number;
   defenderPawnId: string;
   contestedTrackIndex: number;
+  pendingAttackerRoll: number | null;
+  pendingDefenderRoll: number | null;
   rounds: DuelRound[];
   winner: 'attacker' | 'defender' | null;
   attackerHadSix: boolean;

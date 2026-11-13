@@ -64,9 +64,19 @@ export function App() {
       if (canRoll) {
         e.preventDefault();
         triggerRoll();
-      } else if (canLocalAct && state.phase === 'DUEL_ROLL') {
-        e.preventDefault();
-        game.dispatchAction({ type: 'DUEL_ROLL', playerIndex: activeTurnSeat });
+      } else if (state.phase === 'DUEL_ROLL' && state.duel) {
+        const { attackerPlayerIndex, defenderPlayerIndex, pendingAttackerRoll, pendingDefenderRoll } =
+          state.duel;
+        const targetSeat =
+          pendingAttackerRoll === null && game.localSeatIndices.includes(attackerPlayerIndex)
+            ? attackerPlayerIndex
+            : pendingDefenderRoll === null && game.localSeatIndices.includes(defenderPlayerIndex)
+              ? defenderPlayerIndex
+              : null;
+        if (targetSeat !== null) {
+          e.preventDefault();
+          game.dispatchAction({ type: 'DUEL_ROLL', playerIndex: targetSeat });
+        }
       }
     };
 
@@ -154,13 +164,22 @@ export function App() {
       <DuelModal
         state={state}
         language={language}
-        canAct={canLocalAct}
-        onRollDuel={() =>
-          game.dispatchAction({ type: 'DUEL_ROLL', playerIndex: activeTurnSeat })
+        localSeatIndices={game.localSeatIndices}
+        canAcknowledge={
+          state.duel !== null &&
+          (game.localSeatIndices.includes(state.duel.attackerPlayerIndex) ||
+            game.localSeatIndices.includes(state.duel.defenderPlayerIndex))
         }
-        onAcknowledge={() =>
-          game.dispatchAction({ type: 'ACK_DUEL', playerIndex: activeTurnSeat })
+        onRollDuel={(playerIndex) =>
+          game.dispatchAction({ type: 'DUEL_ROLL', playerIndex })
         }
+        onAcknowledge={() => {
+          const ackSeat =
+            state.duel && game.localSeatIndices.includes(state.duel.attackerPlayerIndex)
+              ? state.duel.attackerPlayerIndex
+              : state.duel?.defenderPlayerIndex ?? activeTurnSeat;
+          game.dispatchAction({ type: 'ACK_DUEL', playerIndex: ackSeat });
+        }}
       />
 
       <ActivityModal

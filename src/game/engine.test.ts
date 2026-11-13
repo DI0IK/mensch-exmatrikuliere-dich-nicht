@@ -6,6 +6,7 @@ import {
   createInitialState,
   resolveDuelRoll,
   rollDice,
+  rollDuelDie,
   selectPawn,
 } from './engine';
 import type { PlayerConfig } from './types';
@@ -374,5 +375,48 @@ describe('Mensch exmatrikuliere dich nicht - Game Engine', () => {
     chainState = acknowledgeDuel(chainState);
     expect(chainState.phase).toBe('DUEL_ROLL');
     expect(chainState.duel?.defenderPawnId).toBe('blau-1');
+  });
+
+  it('requires each duel participant to roll their own die independently', () => {
+    let state = createInitialState(twoPlayers());
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 4 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 7 } };
+        return p;
+      }),
+    };
+
+    state = rollDice(state, seqRng([3]));
+    state = selectPawn(state, 'rot-0');
+    expect(state.phase).toBe('DUEL_ROLL');
+    expect(state.duel?.pendingAttackerRoll).toBeNull();
+    expect(state.duel?.pendingDefenderRoll).toBeNull();
+
+    // Attacker (0) rolls 4 -> waits for defender (1)
+    state = rollDuelDie(state, 0, seqRng([4]));
+    expect(state.phase).toBe('DUEL_ROLL');
+    expect(state.duel?.pendingAttackerRoll).toBe(4);
+    expect(state.duel?.pendingDefenderRoll).toBeNull();
+
+    // Attacker cannot roll twice before defender rolls
+    const afterDoubleRoll = rollDuelDie(state, 0, seqRng([6]));
+    expect(afterDoubleRoll.duel?.pendingAttackerRoll).toBe(4);
+
+    // Defender (1) rolls 4 -> tie resets both pending rolls and stays in DUEL_ROLL
+    state = rollDuelDie(state, 1, seqRng([4]));
+    expect(state.phase).toBe('DUEL_ROLL');
+    expect(state.duel?.rounds).toEqual([{ attackerRoll: 4, defenderRoll: 4 }]);
+    expect(state.duel?.pendingAttackerRoll).toBeNull();
+    expect(state.duel?.pendingDefenderRoll).toBeNull();
+
+    // Defender rolls first (5), then Attacker rolls (2) -> Defender wins
+    state = rollDuelDie(state, 1, seqRng([5]));
+    expect(state.phase).toBe('DUEL_ROLL');
+    expect(state.duel?.pendingDefenderRoll).toBe(5);
+    state = rollDuelDie(state, 0, seqRng([2]));
+    expect(state.phase).toBe('DUEL_RESULT');
+    expect(state.duel?.winner).toBe('defender');
   });
 });

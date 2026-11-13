@@ -13,10 +13,20 @@ A university-themed, slightly modified version of *Mensch ärgere dich nicht* bu
 
 ## Features
 
-- **2–4 Players**: Play solo against bots, local pass-and-play, or mix in remote players.
-- **Serverless WebRTC P2P**: Connect browser-to-browser using compressed `#join=` invite links or copy-paste Offer/Answer codes (public STUN, no backend server required), with live Waiting Room sync and automatic Bot takeover if a guest leaves.
-- **Bilingual UI**: Switch between German (`DE`) and English (`EN`) anytime.
+- **2–4 Players**: Play solo against bots, local pass-and-play, or mix in online friends — seats 2–4 simply toggle between **Local** and **Bot / Open Online Slot**.
+- **Unified Room Code Multiplayer (WebRTC)**: Share your 6-character **Lobby Code** or `#room=` invite link, or enter a friend's code directly in the same lobby view. Unfilled online slots automatically run as bots, and disconnected remote players can be taken over by a bot mid-game.
+- **Custom Student Profiles**: Pick your name, study major (*Studiengang*), and pawn emoji in the lobby.
+- **Live Connection Inspector (`ⓘ`)**: Check your role, lobby code, and whether each online player is connected via **Local (LAN)**, **STUN**, or **TURN** right from the in-game utility bar.
+- **Bilingual UI & Keyboard Controls**: Switch between German (`DE`) and English (`EN`) anytime, and press `Space` to roll the dice on your turn.
 - **Synthesized Tabletop Audio**: Web Audio API dice clatter, wooden pawn taps, and stamp effects with a mute toggle.
+
+## Optional TURN Relay Configuration
+
+Public Google STUN servers are enabled by default. For restrictive university/corporate networks (e.g., eduroam or symmetric NAT), you can configure a TURN server via environment variables at build time (or GitHub Actions secrets for Pages deployment):
+
+- `VITE_TURN_URL` (e.g. `turn:your-turn-server:3478`)
+- `VITE_TURN_USER`
+- `VITE_TURN_PASS`
 
 ## Local Development
 

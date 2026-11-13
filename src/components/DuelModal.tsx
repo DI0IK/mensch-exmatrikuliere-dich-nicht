@@ -6,8 +6,9 @@ import { DieFace } from './DieFace';
 interface DuelModalProps {
   state: GameState;
   language: Language;
-  canAct: boolean;
-  onRollDuel: () => void;
+  localSeatIndices: number[];
+  canAcknowledge: boolean;
+  onRollDuel: (playerIndex: number) => void;
   onAcknowledge: () => void;
 }
 
@@ -21,7 +22,8 @@ const COLOR_HEX: Record<PlayerColor, string> = {
 export const DuelModal: React.FC<DuelModalProps> = ({
   state,
   language,
-  canAct,
+  localSeatIndices,
+  canAcknowledge,
   onRollDuel,
   onAcknowledge,
 }) => {
@@ -35,6 +37,40 @@ export const DuelModal: React.FC<DuelModalProps> = ({
   const defender = state.players[duel.defenderPlayerIndex];
   const latestRound = duel.rounds[duel.rounds.length - 1] ?? null;
   const isTie = latestRound !== null && latestRound.attackerRoll === latestRound.defenderRoll;
+
+  const showTieDice =
+    state.phase === 'DUEL_ROLL' &&
+    isTie &&
+    duel.pendingAttackerRoll === null &&
+    duel.pendingDefenderRoll === null;
+
+  const displayedAttackerRoll =
+    state.phase === 'DUEL_RESULT'
+      ? latestRound?.attackerRoll ?? null
+      : duel.pendingAttackerRoll !== null
+        ? duel.pendingAttackerRoll
+        : showTieDice
+          ? latestRound?.attackerRoll ?? null
+          : null;
+
+  const displayedDefenderRoll =
+    state.phase === 'DUEL_RESULT'
+      ? latestRound?.defenderRoll ?? null
+      : duel.pendingDefenderRoll !== null
+        ? duel.pendingDefenderRoll
+        : showTieDice
+          ? latestRound?.defenderRoll ?? null
+          : null;
+
+  const canRollAttacker =
+    state.phase === 'DUEL_ROLL' &&
+    duel.pendingAttackerRoll === null &&
+    localSeatIndices.includes(duel.attackerPlayerIndex);
+
+  const canRollDefender =
+    state.phase === 'DUEL_ROLL' &&
+    duel.pendingDefenderRoll === null &&
+    localSeatIndices.includes(duel.defenderPlayerIndex);
 
   return (
     <div
@@ -101,10 +137,36 @@ export const DuelModal: React.FC<DuelModalProps> = ({
             </span>
             <strong style={{ color: COLOR_HEX[attacker.color] }}>{attacker.name}</strong>
             <DieFace
-              value={latestRound ? latestRound.attackerRoll : null}
+              value={displayedAttackerRoll}
               size={60}
               accentColor={COLOR_HEX[attacker.color]}
             />
+            {state.phase === 'DUEL_ROLL' && (
+              duel.pendingAttackerRoll !== null ? (
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--stamp-green)' }}>
+                  ✓ {language === 'de' ? 'Gewürfelt' : 'Rolled'}
+                </span>
+              ) : canRollAttacker ? (
+                <button
+                  type="button"
+                  className="tactile-btn primary"
+                  style={{ padding: '6px 14px', fontSize: '0.84rem' }}
+                  onClick={() => onRollDuel(duel.attackerPlayerIndex)}
+                >
+                  {language === 'de' ? 'Würfeln!' : 'Roll!'}
+                </button>
+              ) : (
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--ink-muted)' }}>
+                  {attacker.seatType === 'bot'
+                    ? language === 'de'
+                      ? 'Bot würfelt…'
+                      : 'Bot rolling…'
+                    : language === 'de'
+                      ? 'Wartet…'
+                      : 'Waiting…'}
+                </span>
+              )
+            )}
           </div>
 
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem' }}>
@@ -129,10 +191,36 @@ export const DuelModal: React.FC<DuelModalProps> = ({
             </span>
             <strong style={{ color: COLOR_HEX[defender.color] }}>{defender.name}</strong>
             <DieFace
-              value={latestRound ? latestRound.defenderRoll : null}
+              value={displayedDefenderRoll}
               size={60}
               accentColor={COLOR_HEX[defender.color]}
             />
+            {state.phase === 'DUEL_ROLL' && (
+              duel.pendingDefenderRoll !== null ? (
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--stamp-green)' }}>
+                  ✓ {language === 'de' ? 'Gewürfelt' : 'Rolled'}
+                </span>
+              ) : canRollDefender ? (
+                <button
+                  type="button"
+                  className="tactile-btn primary"
+                  style={{ padding: '6px 14px', fontSize: '0.84rem' }}
+                  onClick={() => onRollDuel(duel.defenderPlayerIndex)}
+                >
+                  {language === 'de' ? 'Würfeln!' : 'Roll!'}
+                </button>
+              ) : (
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--ink-muted)' }}>
+                  {defender.seatType === 'bot'
+                    ? language === 'de'
+                      ? 'Bot würfelt…'
+                      : 'Bot rolling…'
+                    : language === 'de'
+                      ? 'Wartet…'
+                      : 'Waiting…'}
+                </span>
+              )
+            )}
           </div>
         </div>
 
@@ -188,12 +276,8 @@ export const DuelModal: React.FC<DuelModalProps> = ({
           </div>
         )}
 
-        {state.phase === 'DUEL_ROLL' ? (
-          <button className="tactile-btn primary" onClick={onRollDuel} disabled={!canAct}>
-            {t.duelRollBtn}
-          </button>
-        ) : (
-          <button className="tactile-btn primary" onClick={onAcknowledge} disabled={!canAct}>
+        {state.phase === 'DUEL_RESULT' && (
+          <button className="tactile-btn primary" onClick={onAcknowledge} disabled={!canAcknowledge}>
             {t.duelContinueBtn}
           </button>
         )}
