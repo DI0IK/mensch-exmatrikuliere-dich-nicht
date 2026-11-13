@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { canUseSuperpower, getPlayerSuperpower, SUPERPOWER_META } from '../game/superpowers';
 import type { GameAction, GameLogEntry, GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
+import { ConnectionInfoModal } from '../../../shared/components/ConnectionInfoModal';
+import { GameToolbar } from '../../../shared/components/GameToolbar';
 import type { IceTransportKind } from '../../../shared/net/lobbyRoom';
-import { ConnectionInfoModal } from './ConnectionInfoModal';
 import { DieFace } from './DieFace';
 
 interface ActionDockProps {
@@ -448,36 +449,20 @@ export const ActionDock: React.FC<ActionDockProps> = ({
       )}
 
       {/* Utility Bar */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <button className="tactile-btn" onClick={onToggleLanguage} style={{ flex: 1, padding: '8px 10px', fontSize: '0.82rem' }}>
-          {language === 'de' ? 'DE / EN' : 'EN / DE'}
-        </button>
-        <button className="tactile-btn" onClick={onToggleMute} style={{ flex: 1, padding: '8px 10px', fontSize: '0.82rem' }}>
-          {muted ? t.soundOff : t.soundOn}
-        </button>
-        <button
-          type="button"
-          className="tactile-btn"
-          onClick={() => setShowConnInfo((v) => !v)}
-          aria-label={language === 'de' ? 'Verbindungsdetails' : 'Connection details'}
-          title={language === 'de' ? 'Verbindungsdetails' : 'Connection details'}
-          style={{
-            padding: '8px 11px',
-            fontSize: '0.82rem',
-            lineHeight: 1,
-          }}
-        >
-          ⓘ
-        </button>
-        <button className="tactile-btn" onClick={onBackToLobby} style={{ width: '100%', padding: '8px 10px', fontSize: '0.84rem' }}>
-          {isGuest ? t.webrtcLeaveGame : t.backToLobby}
-        </button>
-      </div>
+      <GameToolbar
+        language={language}
+        muted={muted}
+        backLabel={isGuest ? t.webrtcLeaveGame : t.backToLobby}
+        onOpenConnectionInfo={() => setShowConnInfo((v) => !v)}
+        onToggleMute={onToggleMute}
+        onToggleLanguage={onToggleLanguage}
+        onReturnToLobby={onBackToLobby}
+      />
 
       {/* Connection Details Modal */}
       {showConnInfo && (
         <ConnectionInfoModal
-          state={state}
+          players={state.players}
           language={language}
           isGuest={isGuest}
           hostLobbyCode={hostLobbyCode}

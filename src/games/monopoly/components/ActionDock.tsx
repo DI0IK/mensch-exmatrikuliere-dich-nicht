@@ -1,4 +1,5 @@
 import React from 'react';
+import { GameToolbar } from '../../../shared/components/GameToolbar';
 import { JAIL_FINE } from '../game/boardData';
 import { getPlayerNetWorth } from '../game/helpers';
 import type { GameAction, GameState, Language } from '../game/types';
@@ -38,55 +39,15 @@ export const ActionDock: React.FC<ActionDockProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Top Toolbar */}
-      <div
-        className="paper-card"
-        style={{
-          padding: '8px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            type="button"
-            className="tactile-btn"
-            onClick={onOpenConnectionInfo}
-            title={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
-            style={{ padding: '5px 9px', fontSize: '0.84rem' }}
-          >
-            ⓘ
-          </button>
-          <button
-            type="button"
-            className="tactile-btn"
-            onClick={onToggleMute}
-            title={muted ? t.unmuteAudio : t.muteAudio}
-            style={{ padding: '5px 9px', fontSize: '0.84rem' }}
-          >
-            {muted ? '🔇' : '🔊'}
-          </button>
-          <button
-            type="button"
-            className="tactile-btn"
-            onClick={onToggleLanguage}
-            style={{ padding: '5px 9px', fontSize: '0.78rem' }}
-          >
-            {language === 'de' ? 'DE' : 'EN'}
-          </button>
-        </div>
-
-        <button
-          type="button"
-          className="tactile-btn"
-          onClick={onReturnToLobby}
-          style={{ padding: '5px 10px', fontSize: '0.78rem' }}
-        >
-          ← {t.backToLobby}
-        </button>
-      </div>
+      <GameToolbar
+        language={language}
+        muted={muted}
+        backLabel={t.backToLobby}
+        onOpenConnectionInfo={onOpenConnectionInfo}
+        onToggleMute={onToggleMute}
+        onToggleLanguage={onToggleLanguage}
+        onReturnToLobby={onReturnToLobby}
+      />
 
       {/* Active Turn & Actions */}
       <div

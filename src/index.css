@@ -325,7 +325,7 @@ select {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 16px;
   align-items: start;
-  max-width: 1280px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
 }
@@ -337,8 +337,8 @@ select {
 }
 
 .monopoly-board-frame {
-  width: 100%;
-  max-width: 780px;
+  width: min(100%, calc(100dvh - 48px));
+  max-width: 100%;
   margin: 0 auto;
   padding: 12px;
   background: linear-gradient(145deg, #d5b88c 0%, #c19f6e 50%, #b08c5a 100%);

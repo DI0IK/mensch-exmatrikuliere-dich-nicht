@@ -1,9 +1,9 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { ConnectionInfoModal } from '../../shared/components/ConnectionInfoModal';
 import { sound } from '../../shared/audio/sound';
 import { Lobby as SharedLobby } from '../../shared/components/Lobby';
 import { ActionDock } from './components/ActionDock';
 import { AuctionModal } from './components/AuctionModal';
-import { ConnectionInfoModal } from './components/ConnectionInfoModal';
 import { GameBoard } from './components/GameBoard';
 import { GameModeSelector } from './components/lobby/GameModeSelector';
 import { PropertyManagerModal } from './components/PropertyManagerModal';
@@ -195,7 +195,7 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
 
       {showConnectionInfo && (
         <ConnectionInfoModal
-          state={state}
+          players={state.players}
           language={language}
           isGuest={mp.isGuest}
           hostLobbyCode={mp.hostLobbyCode}

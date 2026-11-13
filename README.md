@@ -1,34 +1,59 @@
-# Mensch exmatrikuliere dich nicht
+# 🎓 Campus Games Hub
 
-A university-themed, slightly modified version of *Mensch ärgere dich nicht* built with **React**, **TypeScript**, and **Vite** — featuring a tactile German tabletop aesthetic, smart bots, and pure frontend browser-to-browser multiplayer over **WebRTC**.
+**Two university-themed German tabletop classics in one browser-first multiplayer web app** — built with **React 19**, **TypeScript**, and **Vite**, featuring smart bots, a shared **WebRTC (PeerJS)** lobby, bilingual (`DE` / `EN`) UI, and synthesized Web Audio tabletop sound effects.
 
-## Rules & Twist
+---
 
-- **Immatrikulation**: Roll a `6` to move a pawn out of your corner *Wohnheim* onto your start tile (grants a bonus roll).
-- **1v1 Exmatrikulations-Duell**: Landing on an opponent's pawn does not automatically kick them — instead, both players roll `1d6` in a 1v1 duel! Ties re-roll until someone wins; the loser is **exmatriculated** back to their *Wohnheim*, and the winner keeps the tile.
-- **Classic MÄDN Nuances**:
-  - Up to **3 attempts** to roll a `6` when all 4 pawns are in the *Wohnheim*.
-  - Must clear your own start tile first if pawns remain in the *Wohnheim*.
-  - Exact roll required to enter and advance in the 4-tile *Abschluss* goal stretch (first player with all 4 pawns in goal wins).
+## 🕹️ Included Games
 
-## Features
+Switch between games directly in the lobby (or jump straight in via game-aware invite links like `#game=monopoly&room=ABC123`).
 
-- **2–4 Players**: Play solo against bots, local pass-and-play, or mix in online friends — seats 2–4 simply toggle between **Local** and **Bot / Open Online Slot**.
-- **Unified Room Code Multiplayer (WebRTC)**: Share your 6-character **Lobby Code** or `#room=` invite link, or enter a friend's code directly in the same lobby view. Unfilled online slots automatically run as bots, and disconnected remote players can be taken over by a bot mid-game.
-- **Custom Student Profiles**: Pick your name, study major (*Studiengang*), and pawn emoji in the lobby.
-- **Live Connection Inspector (`ⓘ`)**: Check your role, lobby code, and whether each online player is connected via **Local (LAN)**, **STUN**, or **TURN** right from the in-game utility bar.
-- **Bilingual UI & Keyboard Controls**: Switch between German (`DE`) and English (`EN`) anytime, and press `Space` to roll the dice on your turn.
-- **Synthesized Tabletop Audio**: Web Audio API dice clatter, wooden pawn taps, and stamp effects with a mute toggle.
+### 1. 🎲 Mensch exmatrikuliere dich nicht
+A student-life twist on *Mensch ärgere dich nicht* with a tactile German tabletop aesthetic:
+- **Immatrikulation**: Roll a `6` to leave your corner *Wohnheim* (with a bonus roll and up to 3 attempts when all 4 pawns are at home).
+- **1v1 Exmatrikulations-Duell**: Landing on an opponent triggers a `1d6` duel instead of an instant kick — ties re-roll until someone wins; the loser is exmatriculated back to their *Wohnheim*.
+- **Game Modes & Superpowers**:
+  - **Hardcore Mode**: Campus event tiles (*Mensa*, *Bib*, *Prüfungsamt*, *Party*) and `6-6-6` streaks (50/50 instant win or full reset).
+  - **Ultra-Hardcore / Duel Variants**: Configurable duel rules and optional student superpowers in the lobby.
+- **Classic Nuances**: Clear your own start tile first when pawns remain at home, and hit exact rolls to enter and advance in the 4-tile *Abschluss* goal stretch.
 
-## Optional TURN Relay Configuration
+### 2. 🏛️ DHBW Karlsruhe Monopoly (Student Edition)
+A 40-tile campus board themed around **DHBW Karlsruhe** (*Erzbergerstraße*, *A-Bau*, *E-Bau*, *Audimax*, *Mensa Moltkestraße*, *KVV* lines, *Rechenzentrum*, *Prüfungsamt*, and more):
+- **Tactile Tabletop Board**: Classic square layout with inward-facing property color bars, 3D-styled pawns, stacked *Ereignis* / *Semester-Kasse* card decks, and a split **Prüfungsamt** corner (*Prüfungsamt* detention box + *Nur zur Einsicht* visiting strip).
+- **Contextual Property Modals**: Click any tile on the board to inspect rent tables, build *Tutorien* / *Vorlesungssäle* (houses/hotels), mortgage, or unmortgage depending on what you can currently do.
+- **Full Economy**: Property auctions, P2P & bot trading, *Prüfungsamt* bail/doubles/free-pass escape, bankruptcy handling, and configurable lobby rules (**Turbo-Start**, **Free Parking Pot**, **Auctions**, **Double on Start**).
 
-Public Google STUN servers are enabled by default. For restrictive university/corporate networks (e.g., eduroam or symmetric NAT), you can configure a TURN server via environment variables at build time (or GitHub Actions secrets for Pages deployment):
+---
 
-- `VITE_TURN_URL` (e.g. `turn:your-turn-server:3478`)
-- `VITE_TURN_USER`
-- `VITE_TURN_PASS`
+## ✨ Shared Platform Features
 
-## Local Development
+- **2–4 Players (Local, Bots, or Online)**: Toggle seats 2–4 between **Local**, **Bot**, or **Open Online Slot**. Unfilled online slots run as bots, and disconnected remote players can be taken over by a bot mid-game.
+- **Shared P2P WebRTC Lobby**: 6-character room codes and game-aware invite links (`#game=medn&room=...` / `#game=monopoly&room=...`) powered by PeerJS — no backend game server required.
+- **Custom Student Profiles**: Choose your name, study major (*Studiengang*), and pawn emoji (persisted in `localStorage`).
+- **Live Connection Inspector (`ⓘ`)**: Inspect your role, room code, and ICE connection type (**Local LAN**, **STUN**, or **TURN**) for every connected seat.
+- **Bilingual UI & Audio**: Toggle `DE` / `EN` anytime, mute/unmute synthesized Web Audio dice & stamp effects, and use `Space` to roll in MÄDN.
+
+---
+
+## 📁 Project Structure
+
+```text
+src/
+├── App.tsx                     # Lobby game switcher & hash routing (#game=...&room=...)
+├── main.tsx                    # App entry point
+├── index.css                   # Shared tabletop theme & board styles
+├── shared/                     # Code shared across all games
+│   ├── audio/sound.ts          # Web Audio API tabletop sound effects
+│   ├── components/Lobby.tsx    # Unified P2P multiplayer lobby & profile UI
+│   └── net/                    # PeerJS lobby room, ICE/TURN config, join-link helpers
+└── games/
+    ├── medn/                   # Mensch exmatrikuliere dich nicht (engine, AI, UI, net)
+    └── monopoly/               # DHBW Karlsruhe Monopoly (engine, AI, UI, net)
+```
+
+---
+
+## 🚀 Local Development
 
 ```bash
 npm install
@@ -37,10 +62,26 @@ npm run dev
 
 ### Scripts
 
-- `npm run dev` — Start the Vite dev server
-- `npm test -- --run` — Run the Vitest unit test suite for the game engine and bot AI
-- `npm run build` — Type-check (`tsc -b`) and build production assets into `dist/`
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Start the Vite development server |
+| `npm test -- --run` | Run all Vitest unit tests (`medn` + `monopoly` engines) |
+| `npm run build` | Type-check (`tsc -b`) and build production assets into `dist/` |
+| `npm run lint` | Run `oxlint` across the codebase |
+| `npm run preview` | Preview the production `dist/` bundle locally |
 
-## Deployment (GitHub Pages)
+---
 
-The included workflow at `.github/workflows/deploy.yml` runs tests, builds the app, and deploys `dist/` to GitHub Pages on pushes to `main`. In your repository's **Settings → Pages**, set **Source** to **GitHub Actions**.
+## 🌐 Optional TURN Relay Configuration
+
+Public Google STUN servers are enabled by default. For restrictive university or corporate networks (e.g., eduroam or symmetric NAT), configure a TURN relay via environment variables at build time (or GitHub Actions secrets):
+
+- `VITE_TURN_URL` (e.g. `turn:your-turn-server:3478`)
+- `VITE_TURN_USER`
+- `VITE_TURN_PASS`
+
+---
+
+## 📦 Deployment (GitHub Pages)
+
+The workflow at `.github/workflows/deploy.yml` runs tests, builds `dist/`, and deploys to GitHub Pages on pushes to `main`. In your repository's **Settings → Pages**, set **Source** to **GitHub Actions**.

@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import type { GameState, Language } from '../game/types';
-import { TRANSLATIONS } from '../i18n/translations';
-import { getIceServers } from '../../../shared/net/iceConfig';
-import type { IceTransportKind } from '../../../shared/net/lobbyRoom';
+import { getIceServers } from '../net/iceConfig';
+import type { IceTransportKind } from '../net/lobbyRoom';
+
+export interface ConnectionSeatPlayer {
+  color: string;
+  name: string;
+  emoji?: string;
+  seatType: string;
+}
 
 interface ConnectionInfoModalProps {
-  state: GameState;
-  language: Language;
+  players: ConnectionSeatPlayer[];
+  language: 'de' | 'en';
   isGuest: boolean;
   hostLobbyCode: string | null;
   connectedSeats: number[];
@@ -16,7 +21,7 @@ interface ConnectionInfoModalProps {
 }
 
 export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
-  state,
+  players,
   language,
   isGuest,
   hostLobbyCode,
@@ -25,7 +30,6 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
   seatTransports,
   onClose,
 }) => {
-  const t = TRANSLATIONS[language];
   const [copiedCode, setCopiedCode] = useState(false);
 
   return (
@@ -115,31 +119,32 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
                 <button
                   type="button"
                   className="tactile-btn"
-                  aria-label={copiedCode ? t.copied : t.lobbyCodeCopy}
-                  title={copiedCode ? t.copied : t.lobbyCodeCopy}
-                  style={{
-                    padding: '4px 6px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    lineHeight: 1,
-                  }}
+                  aria-label={
+                    copiedCode
+                      ? language === 'de'
+                        ? 'Kopiert!'
+                        : 'Copied!'
+                      : language === 'de'
+                        ? 'Code kopieren'
+                        : 'Copy code'
+                  }
+                  title={
+                    copiedCode
+                      ? language === 'de'
+                        ? 'Kopiert!'
+                        : 'Copied!'
+                      : language === 'de'
+                        ? 'Code kopieren'
+                        : 'Copy code'
+                  }
+                  style={{ padding: '4px 6px', lineHeight: 1 }}
                   onClick={() => {
-                    navigator.clipboard?.writeText(hostLobbyCode);
+                    void navigator.clipboard?.writeText(hostLobbyCode);
                     setCopiedCode(true);
                     window.setTimeout(() => setCopiedCode(false), 1600);
                   }}
                 >
-                  {copiedCode ? (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--stamp-green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  ) : (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                  )}
+                  {copiedCode ? '✓' : '⧉'}
                 </button>
               </div>
             </div>
@@ -163,7 +168,7 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
           <div style={{ fontWeight: 700, color: 'var(--ink-muted)', fontSize: '0.76rem', textTransform: 'uppercase' }}>
             {language === 'de' ? 'Spielerplätze' : 'Seats'}
           </div>
-          {state.players.map((p, idx) => {
+          {players.map((p, idx) => {
             const isRemote = p.seatType === 'human-remote';
             const isOnline = connectedSeats.includes(idx);
             const isDropped = disconnectedSeats.includes(idx);
