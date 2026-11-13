@@ -33,6 +33,8 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player}: IMMATRIKULIERT!`;
       case 'exmatrikulation':
         return `${player} exmatrikuliert ${opp} (${entry.detail})!`;
+      case 'duel_win':
+        return `${player} besiegt ${opp} im 1v1-Duell (${entry.detail})!`;
       case 'duel_tie':
         return `Duell-Gleichstand (${entry.detail}) — Nochmal!`;
       case 'goal':
@@ -56,6 +58,8 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player}: IMMATRICULATED!`;
       case 'exmatrikulation':
         return `${player} exmatriculated ${opp} (${entry.detail})!`;
+      case 'duel_win':
+        return `${player} beat ${opp} in 1v1 duel (${entry.detail})!`;
       case 'duel_tie':
         return `Duel tie (${entry.detail}) — Re-roll!`;
       case 'goal':

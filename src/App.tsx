@@ -77,6 +77,19 @@ export function App() {
           e.preventDefault();
           game.dispatchAction({ type: 'DUEL_ROLL', playerIndex: targetSeat });
         }
+      } else if (state.phase === 'DUEL_RESULT' && state.duel) {
+        const ackSeat = game.localSeatIndices.includes(state.duel.attackerPlayerIndex)
+          ? state.duel.attackerPlayerIndex
+          : game.localSeatIndices.includes(state.duel.defenderPlayerIndex)
+            ? state.duel.defenderPlayerIndex
+            : null;
+        if (ackSeat !== null) {
+          e.preventDefault();
+          game.dispatchAction({ type: 'ACK_DUEL', playerIndex: ackSeat });
+        }
+      } else if (canLocalAct && state.phase === 'ACTIVITY_RESULT') {
+        e.preventDefault();
+        game.dispatchAction({ type: 'ACK_ACTIVITY', playerIndex: activeTurnSeat });
       }
     };
 

@@ -16,21 +16,44 @@ import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lob
 import type { NetMessage } from '../net/webrtc';
 
 const USERNAME_STORAGE_KEY = 'medn_username';
+const PROFILE_STORAGE_KEY = 'medn_profile';
 
-function loadSavedUsername(): string | null {
+interface SavedProfile {
+  name?: string;
+  major?: string;
+  emoji?: string;
+}
+
+function loadSavedProfile(): SavedProfile {
   try {
-    const saved = window.localStorage.getItem(USERNAME_STORAGE_KEY)?.trim().slice(0, 18);
-    return saved || null;
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as SavedProfile) : {};
+    const legacyName = window.localStorage.getItem(USERNAME_STORAGE_KEY)?.trim().slice(0, 18);
+    return {
+      name: parsed.name?.trim().slice(0, 18) || legacyName || undefined,
+      major: typeof parsed.major === 'string' ? parsed.major.trim().slice(0, 28) : undefined,
+      emoji: typeof parsed.emoji === 'string' ? parsed.emoji.trim().slice(0, 8) : undefined,
+    };
   } catch {
-    return null;
+    return {};
   }
 }
 
-function saveUsername(name: string): void {
-  const clean = name.trim().slice(0, 18);
-  if (!clean) return;
+function saveProfile(partial: SavedProfile): void {
   try {
-    window.localStorage.setItem(USERNAME_STORAGE_KEY, clean);
+    const current = loadSavedProfile();
+    const next: SavedProfile = {
+      ...current,
+      ...(partial.name !== undefined && partial.name.trim()
+        ? { name: partial.name.trim().slice(0, 18) }
+        : {}),
+      ...(partial.major !== undefined ? { major: partial.major.trim().slice(0, 28) } : {}),
+      ...(partial.emoji !== undefined ? { emoji: partial.emoji.trim().slice(0, 8) } : {}),
+    };
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(next));
+    if (next.name) {
+      window.localStorage.setItem(USERNAME_STORAGE_KEY, next.name);
+    }
   } catch {
     // ignore storage errors
   }
@@ -104,9 +127,17 @@ function playTransitionSounds(prev: GameState | null, next: GameState): void {
 
 export function useMultiplayerGame() {
   const [players, setPlayers] = useState<PlayerConfig[]>(() => {
-    const saved = loadSavedUsername();
-    if (!saved) return DEFAULT_PLAYERS;
-    return DEFAULT_PLAYERS.map((p, idx) => (idx === 0 ? { ...p, name: saved } : p));
+    const saved = loadSavedProfile();
+    return DEFAULT_PLAYERS.map((p, idx) =>
+      idx === 0
+        ? {
+            ...p,
+            ...(saved.name ? { name: saved.name } : {}),
+            ...(saved.major !== undefined ? { major: saved.major } : {}),
+            ...(saved.emoji ? { emoji: saved.emoji } : {}),
+          }
+        : p
+    );
   });
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_GAME_SETTINGS);
   const settingsRef = useRef(settings);
@@ -125,13 +156,13 @@ export function useMultiplayerGame() {
 
   // Guest P2P state
   const [initialRoomCode] = useState<string>(() => extractHashParam('#room='));
-  const [guestName, setGuestName] = useState(() => loadSavedUsername() ?? 'Gast-Studi');
+  const [guestName, setGuestName] = useState(() => loadSavedProfile().name ?? 'Gast-Studi');
   const guestNameRef = useRef(guestName);
   guestNameRef.current = guestName;
-  const [guestMajor, setGuestMajor] = useState('');
+  const [guestMajor, setGuestMajor] = useState(() => loadSavedProfile().major ?? '');
   const guestMajorRef = useRef(guestMajor);
   guestMajorRef.current = guestMajor;
-  const [guestEmoji, setGuestEmoji] = useState('');
+  const [guestEmoji, setGuestEmoji] = useState(() => loadSavedProfile().emoji ?? '');
   const guestEmojiRef = useRef(guestEmoji);
   guestEmojiRef.current = guestEmoji;
   const [guestConnected, setGuestConnected] = useState(false);
@@ -598,8 +629,13 @@ export function useMultiplayerGame() {
 
   const updatePlayers = (nextPlayers: PlayerConfig[]) => {
     setPlayers(nextPlayers);
-    if (nextPlayers[0]?.name) {
-      saveUsername(nextPlayers[0].name);
+    const hostPlayer = nextPlayers[0];
+    if (hostPlayer) {
+      saveProfile({
+        name: hostPlayer.name,
+        major: hostPlayer.major ?? '',
+        emoji: hostPlayer.emoji ?? '',
+      });
     }
     broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers, settings: settingsRef.current });
   };
@@ -611,7 +647,7 @@ export function useMultiplayerGame() {
 
   const updateGuestName = (name: string) => {
     setGuestName(name);
-    saveUsername(name);
+    saveProfile({ name });
     if (guestConnected) {
       const clean = name.trim().slice(0, 18);
       if (clean) {
@@ -622,6 +658,7 @@ export function useMultiplayerGame() {
 
   const updateGuestMajor = (major: string) => {
     setGuestMajor(major);
+    saveProfile({ major });
     if (guestConnected) {
       lobbyGuestRef.current?.send({ kind: 'SET_PROFILE', major: major.trim().slice(0, 28) });
     }
@@ -629,6 +666,7 @@ export function useMultiplayerGame() {
 
   const updateGuestEmoji = (emoji: string) => {
     setGuestEmoji(emoji);
+    saveProfile({ emoji });
     if (guestConnected) {
       lobbyGuestRef.current?.send({ kind: 'SET_PROFILE', emoji: emoji.trim().slice(0, 8) });
     }
