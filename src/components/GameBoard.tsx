@@ -21,6 +21,7 @@ interface GameBoardProps {
   state: GameState;
   language: Language;
   canInteract: boolean;
+  overrideSelectablePawnIds?: string[];
   onSelectPawn: (pawnId: string) => void;
 }
 
@@ -73,6 +74,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   state,
   language: _language,
   canInteract,
+  overrideSelectablePawnIds,
   onSelectPawn,
 }) => {
   // Build lookup of start tiles
@@ -81,7 +83,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     startTileColors.set(START_INDEX_BY_COLOR[c], c);
   });
 
-  const legalSet = new Set(canInteract && state.phase === 'SELECT_PAWN' ? state.legalPawnIds : []);
+  const legalSet = new Set(
+    canInteract
+      ? overrideSelectablePawnIds && overrideSelectablePawnIds.length > 0
+        ? overrideSelectablePawnIds
+        : state.phase === 'SELECT_PAWN'
+          ? state.legalPawnIds
+          : []
+      : []
+  );
 
   return (
     <div className="board-frame">

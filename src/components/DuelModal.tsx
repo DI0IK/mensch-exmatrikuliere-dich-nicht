@@ -1,4 +1,5 @@
 import React from 'react';
+import { canUseSuperpower } from '../game/superpowers';
 import type { GameState, Language, PlayerColor } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
 import { DieFace } from './DieFace';
@@ -9,6 +10,7 @@ interface DuelModalProps {
   localSeatIndices: number[];
   canAcknowledge: boolean;
   onRollDuel: (playerIndex: number) => void;
+  onAutoWinDuel: (playerIndex: number) => void;
   onAcknowledge: () => void;
 }
 
@@ -25,6 +27,7 @@ export const DuelModal: React.FC<DuelModalProps> = ({
   localSeatIndices,
   canAcknowledge,
   onRollDuel,
+  onAutoWinDuel,
   onAcknowledge,
 }) => {
   const duel = state.duel;
@@ -275,6 +278,33 @@ export const DuelModal: React.FC<DuelModalProps> = ({
             )}
           </div>
         )}
+
+        {state.phase === 'DUEL_ROLL' &&
+          [duel.attackerPlayerIndex, duel.defenderPlayerIndex]
+            .filter(
+              (seatIdx) =>
+                localSeatIndices.includes(seatIdx) &&
+                canUseSuperpower(state, seatIdx, 'autoWinDuel')
+            )
+            .map((seatIdx) => (
+              <button
+                key={`autowin-${seatIdx}`}
+                type="button"
+                className="tactile-btn"
+                style={{
+                  background: '#fff3cd',
+                  borderColor: '#c99a2e',
+                  color: '#7a5400',
+                  fontSize: '0.86rem',
+                }}
+                onClick={() => onAutoWinDuel(seatIdx)}
+              >
+                👑{' '}
+                {language === 'de'
+                  ? `Superkraft (${state.players[seatIdx]?.name}): Duell sofort gewinnen!`
+                  : `Superpower (${state.players[seatIdx]?.name}): Win duel immediately!`}
+              </button>
+            ))}
 
         {state.phase === 'DUEL_RESULT' && (
           <button className="tactile-btn primary" onClick={onAcknowledge} disabled={!canAcknowledge}>

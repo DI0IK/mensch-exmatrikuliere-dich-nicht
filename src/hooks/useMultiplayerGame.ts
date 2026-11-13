@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sound } from '../audio/sound';
 import { DEFAULT_NAMES } from '../components/lobby/types';
-import { chooseBestBotPawn } from '../game/bot';
+import { chooseBestBotPawn, chooseBotSuperpowerAction } from '../game/bot';
 import {
   acknowledgeActivity,
   acknowledgeDuel,
@@ -9,9 +9,20 @@ import {
   rollDice,
   rollDuelDie,
   selectPawn,
+  applyAutoWinDuelSuperpower,
+  applyInstantFinishSuperpower,
+  applyKickToDormSuperpower,
+  applyLoadedSixSuperpower,
+  applySwapSuperpower,
 } from '../game/engine';
 import { DEFAULT_GAME_SETTINGS } from '../game/modes';
-import type { GameAction, GameSettings, GameState, PlayerConfig } from '../game/types';
+import type {
+  GameAction,
+  GameSettings,
+  GameState,
+  PlayerConfig,
+  SuperpowerType,
+} from '../game/types';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
 
@@ -165,6 +176,9 @@ export function useMultiplayerGame() {
   const [guestEmoji, setGuestEmoji] = useState(() => loadSavedProfile().emoji ?? '');
   const guestEmojiRef = useRef(guestEmoji);
   guestEmojiRef.current = guestEmoji;
+  const [guestSuperpower, setGuestSuperpower] = useState<SuperpowerType | 'random'>('random');
+  const guestSuperpowerRef = useRef(guestSuperpower);
+  guestSuperpowerRef.current = guestSuperpower;
   const [guestConnected, setGuestConnected] = useState(false);
   const [guestConnecting, setGuestConnecting] = useState(false);
   const [guestError, setGuestError] = useState<string | null>(null);
@@ -239,6 +253,26 @@ export function useMultiplayerGame() {
             sound.playPawnTap();
             next = acknowledgeActivity(prev);
             break;
+          case 'USE_SWAP':
+            sound.playPawnTap();
+            next = applySwapSuperpower(prev, action.playerIndex, action.ownPawnId, action.targetPawnId);
+            break;
+          case 'USE_INSTANT_FINISH':
+            sound.playPawnTap();
+            next = applyInstantFinishSuperpower(prev, action.playerIndex, action.pawnId);
+            break;
+          case 'USE_AUTO_WIN_DUEL':
+            sound.playStampThud();
+            next = applyAutoWinDuelSuperpower(prev, action.playerIndex);
+            break;
+          case 'USE_LOADED_SIX':
+            sound.playDiceRoll();
+            next = applyLoadedSixSuperpower(prev, action.playerIndex);
+            break;
+          case 'USE_KICK_TO_DORM':
+            sound.playStampThud();
+            next = applyKickToDormSuperpower(prev, action.playerIndex, action.targetPawnId);
+            break;
         }
 
         if (next.phase === 'GAME_OVER' && prev.phase !== 'GAME_OVER') {
@@ -280,6 +314,18 @@ export function useMultiplayerGame() {
       } else if (msg.kind === 'SET_PROFILE') {
         const cleanMajor = msg.major !== undefined ? msg.major.trim().slice(0, 28) : undefined;
         const cleanEmoji = msg.emoji !== undefined ? msg.emoji.trim().slice(0, 8) : undefined;
+        const hasSuperpowerUpdate = msg.superpower !== undefined;
+        const cleanSuperpower =
+          msg.superpower === 'random'
+            ? undefined
+            : msg.superpower &&
+                (['swap', 'instantFinish', 'autoWinDuel', 'loadedSix', 'kickToDorm'] as const).includes(
+                  msg.superpower
+                )
+              ? msg.superpower
+              : undefined;
+        const validSuperpowerUpdate =
+          hasSuperpowerUpdate && (msg.superpower === 'random' || cleanSuperpower !== undefined);
         setPlayers((prev) => {
           const nextPlayers = prev.map((p, i) =>
             i === seatIndex
@@ -287,6 +333,7 @@ export function useMultiplayerGame() {
                   ...p,
                   ...(cleanMajor !== undefined ? { major: cleanMajor } : {}),
                   ...(cleanEmoji !== undefined ? { emoji: cleanEmoji } : {}),
+                  ...(validSuperpowerUpdate ? { superpower: cleanSuperpower } : {}),
                 }
               : p
           );
@@ -303,6 +350,7 @@ export function useMultiplayerGame() {
                     ...p,
                     ...(cleanMajor !== undefined ? { major: cleanMajor } : {}),
                     ...(cleanEmoji !== undefined ? { emoji: cleanEmoji } : {}),
+                    ...(validSuperpowerUpdate ? { superpower: cleanSuperpower } : {}),
                   }
                 : p
             ),
@@ -453,13 +501,12 @@ export function useMultiplayerGame() {
           }
           const cleanMajor = guestMajorRef.current.trim().slice(0, 28);
           const cleanEmoji = guestEmojiRef.current.trim().slice(0, 8);
-          if (cleanMajor || cleanEmoji) {
-            client.send({
-              kind: 'SET_PROFILE',
-              ...(cleanMajor ? { major: cleanMajor } : {}),
-              ...(cleanEmoji ? { emoji: cleanEmoji } : {}),
-            });
-          }
+          client.send({
+            kind: 'SET_PROFILE',
+            ...(cleanMajor ? { major: cleanMajor } : {}),
+            ...(cleanEmoji ? { emoji: cleanEmoji } : {}),
+            superpower: guestSuperpowerRef.current,
+          });
         } else if (msg.kind === 'STATE_SYNC') {
           playTransitionSounds(gameStateRef.current, msg.state);
           setGameState(msg.state);
@@ -535,6 +582,11 @@ export function useMultiplayerGame() {
               : 1000;
 
     const timer = window.setTimeout(() => {
+      const botSuperpower = chooseBotSuperpowerAction(gameState, activePlayerIndex);
+      if (botSuperpower) {
+        dispatchAction(botSuperpower);
+        return;
+      }
       if (gameState.phase === 'WAIT_ROLL') {
         dispatchAction({ type: 'ROLL_DICE', playerIndex: activePlayerIndex });
       } else if (gameState.phase === 'SELECT_PAWN') {
@@ -672,6 +724,13 @@ export function useMultiplayerGame() {
     }
   };
 
+  const updateGuestSuperpower = (superpower: SuperpowerType | 'random') => {
+    setGuestSuperpower(superpower);
+    if (guestConnected) {
+      lobbyGuestRef.current?.send({ kind: 'SET_PROFILE', superpower });
+    }
+  };
+
   const getConnectionTransports = useCallback(async (): Promise<Record<number, IceTransportKind>> => {
     if (isGuest) {
       const kind = await lobbyGuestRef.current?.getTransportKind();
@@ -696,6 +755,7 @@ export function useMultiplayerGame() {
     guestName,
     guestMajor,
     guestEmoji,
+    guestSuperpower,
     guestConnected,
     guestConnecting,
     guestError,
@@ -705,6 +765,7 @@ export function useMultiplayerGame() {
     updateGuestName,
     updateGuestMajor,
     updateGuestEmoji,
+    updateGuestSuperpower,
     handleCloseRemoteSeat,
     handleGuestJoinRoom,
     handleGuestLeave,

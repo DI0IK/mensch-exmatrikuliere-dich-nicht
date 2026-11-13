@@ -1,6 +1,7 @@
-import { stepsFromStart } from './boardGeometry';
+import { START_INDEX_BY_COLOR, stepsFromStart } from './boardGeometry';
 import { computeTargetLocation } from './engine';
-import type { GameState } from './types';
+import { canUseSuperpower } from './superpowers';
+import type { GameAction, GameState } from './types';
 
 /**
  * Smart bot heuristic for choosing the best legal pawn to move.
@@ -72,4 +73,97 @@ export function chooseBestBotPawn(state: GameState): string | null {
   }
 
   return bestId;
+}
+
+export function chooseBotSuperpowerAction(
+  state: GameState,
+  playerIndex: number
+): GameAction | null {
+  if (!state.settings.ultraHardcore) return null;
+
+  if (
+    state.phase === 'DUEL_ROLL' &&
+    state.duel &&
+    (state.duel.attackerPlayerIndex === playerIndex ||
+      state.duel.defenderPlayerIndex === playerIndex) &&
+    canUseSuperpower(state, playerIndex, 'autoWinDuel')
+  ) {
+    return { type: 'USE_AUTO_WIN_DUEL', playerIndex };
+  }
+
+  if (state.phase !== 'WAIT_ROLL' || state.currentTurn !== playerIndex) return null;
+
+  if (canUseSuperpower(state, playerIndex, 'instantFinish')) {
+    const trackPawn = state.pawns
+      .filter((p) => p.playerIndex === playerIndex && p.location.zone === 'track')
+      .sort((a, b) => {
+        const sa = a.location.zone === 'track' ? stepsFromStart(a.color, a.location.index) : 0;
+        const sb = b.location.zone === 'track' ? stepsFromStart(b.color, b.location.index) : 0;
+        return sa - sb;
+      })[0];
+    if (trackPawn) {
+      return { type: 'USE_INSTANT_FINISH', playerIndex, pawnId: trackPawn.id };
+    }
+  }
+
+  if (canUseSuperpower(state, playerIndex, 'swap')) {
+    const ownTrack = state.pawns
+      .filter((p) => p.playerIndex === playerIndex && p.location.zone === 'track')
+      .sort((a, b) => {
+        const sa = a.location.zone === 'track' ? stepsFromStart(a.color, a.location.index) : 0;
+        const sb = b.location.zone === 'track' ? stepsFromStart(b.color, b.location.index) : 0;
+        return sa - sb;
+      })[0];
+    const bestOpp = state.pawns
+      .filter((p) => p.playerIndex !== playerIndex && p.location.zone === 'track')
+      .sort((a, b) => {
+        const sa = a.location.zone === 'track' ? stepsFromStart(a.color, a.location.index) : 0;
+        const sb = b.location.zone === 'track' ? stepsFromStart(b.color, b.location.index) : 0;
+        return sb - sa;
+      })[0];
+    if (ownTrack && bestOpp && ownTrack.location.zone === 'track' && bestOpp.location.zone === 'track') {
+      const mySteps = stepsFromStart(ownTrack.color, ownTrack.location.index);
+      const targetSteps = stepsFromStart(ownTrack.color, bestOpp.location.index);
+      if (targetSteps > mySteps + 6) {
+        return {
+          type: 'USE_SWAP',
+          playerIndex,
+          ownPawnId: ownTrack.id,
+          targetPawnId: bestOpp.id,
+        };
+      }
+    }
+  }
+
+  if (canUseSuperpower(state, playerIndex, 'loadedSix')) {
+    const player = state.players[playerIndex];
+    const hasBase = state.pawns.some(
+      (p) => p.playerIndex === playerIndex && p.location.zone === 'base'
+    );
+    const startIdx = START_INDEX_BY_COLOR[player.color];
+    const startOccupied = state.pawns.some(
+      (p) =>
+        p.playerIndex === playerIndex &&
+        p.location.zone === 'track' &&
+        p.location.index === startIdx
+    );
+    if (hasBase && !startOccupied) {
+      return { type: 'USE_LOADED_SIX', playerIndex };
+    }
+  }
+
+  if (canUseSuperpower(state, playerIndex, 'kickToDorm')) {
+    const bestOpp = state.pawns
+      .filter((p) => p.playerIndex !== playerIndex && p.location.zone === 'track')
+      .sort((a, b) => {
+        const sa = a.location.zone === 'track' ? stepsFromStart(a.color, a.location.index) : 0;
+        const sb = b.location.zone === 'track' ? stepsFromStart(b.color, b.location.index) : 0;
+        return sb - sa;
+      })[0];
+    if (bestOpp && bestOpp.location.zone === 'track' && stepsFromStart(bestOpp.color, bestOpp.location.index) >= 15) {
+      return { type: 'USE_KICK_TO_DORM', playerIndex, targetPawnId: bestOpp.id };
+    }
+  }
+
+  return null;
 }

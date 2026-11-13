@@ -3,12 +3,14 @@ import type { GameSettings, Language } from './types';
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   hardcore: false,
   duelMode: 'classic',
+  ultraHardcore: false,
 };
 
 export function normalizeGameSettings(partial?: Partial<GameSettings> | null): GameSettings {
   return {
     hardcore: partial?.hardcore ?? DEFAULT_GAME_SETTINGS.hardcore,
     duelMode: partial?.duelMode ?? DEFAULT_GAME_SETTINGS.duelMode,
+    ultraHardcore: partial?.ultraHardcore ?? DEFAULT_GAME_SETTINGS.ultraHardcore,
   };
 }
 
@@ -58,5 +60,21 @@ export const GAME_MODE_OPTIONS: GameModeOption[] = [
     inactiveText: { de: 'AUS', en: 'OFF' },
     isActive: (s) => s.duelMode === 'push',
     toggle: (s) => ({ ...s, duelMode: s.duelMode === 'push' ? 'classic' : 'push' }),
+  },
+  {
+    id: 'ultra-hardcore',
+    icon: '⚡',
+    accentColor: '#7b2cbf',
+    activeBg: '#f6edff',
+    guestBadgeClass: 'stamp-exmatrikuliert',
+    label: { de: 'Superpower-Modus', en: 'Superpower Mode' },
+    description: {
+      de: 'Jeder Spieler wählt 1x pro Spiel eine Superkraft: Positionstausch, Direkt-Abschluss, Duell-Sieg, Wunsch-6 oder Rauswurf.',
+      en: 'Each player picks 1x per game Superpower: Position Swap, Instant Finish, Auto-Win Duel, Guaranteed 6, or Kick to Dorm.',
+    },
+    activeText: { de: '⚡ AN', en: '⚡ ON' },
+    inactiveText: { de: 'AUS', en: 'OFF' },
+    isActive: (s) => Boolean(s.ultraHardcore),
+    toggle: (s) => ({ ...s, ultraHardcore: !s.ultraHardcore }),
   },
 ];

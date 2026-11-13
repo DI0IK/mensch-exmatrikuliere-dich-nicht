@@ -11,23 +11,46 @@ import {
 } from './helpers';
 import { normalizeGameSettings } from './modes';
 import { computeTargetLocation, getLegalPawnIds } from './movement';
+import { SUPERPOWER_LIST } from './superpowers';
 import type { GameSettings, GameState, Pawn, PlayerConfig } from './types';
 
 export { acknowledgeActivity, acknowledgeDuel, resolveDuelRoll, rollDuelDie } from './duels';
 export { allPawnsInBase, allPawnsInGoal, nextActivePlayerIndex, rollD6, type RngFn } from './helpers';
 export { computeTargetLocation, getLegalPawnIds } from './movement';
+export {
+  applyAutoWinDuelSuperpower,
+  applyInstantFinishSuperpower,
+  applyKickToDormSuperpower,
+  applyLoadedSixSuperpower,
+  applySwapSuperpower,
+} from './superpowers';
 
 export function createInitialState(
   players: PlayerConfig[],
-  settings?: Partial<GameSettings>
+  settings?: Partial<GameSettings>,
+  rng: RngFn = Math.random
 ): GameState {
   const activePlayers = players.filter((p) => p.active);
   if (activePlayers.length < 2 || activePlayers.length > 4) {
     throw new Error('Game requires between 2 and 4 active players.');
   }
 
+  const normalizedSettings = normalizeGameSettings(settings);
+  const resolvedPlayers = normalizedSettings.ultraHardcore
+    ? players.map((p) =>
+        p.active && !p.superpower
+          ? {
+              ...p,
+              superpower:
+                SUPERPOWER_LIST[Math.floor(rng() * SUPERPOWER_LIST.length) % SUPERPOWER_LIST.length]
+                  .id,
+            }
+          : p
+      )
+    : players;
+
   const pawns: Pawn[] = [];
-  players.forEach((player, playerIndex) => {
+  resolvedPlayers.forEach((player, playerIndex) => {
     if (!player.active) return;
     for (let i = 0; i < 4; i++) {
       pawns.push({
@@ -41,15 +64,16 @@ export function createInitialState(
   });
 
   return {
-    players,
+    players: resolvedPlayers,
     pawns,
-    settings: normalizeGameSettings(settings),
-    currentTurn: players.findIndex((p) => p.active),
+    settings: normalizedSettings,
+    currentTurn: resolvedPlayers.findIndex((p) => p.active),
     phase: 'WAIT_ROLL',
     lastRoll: null,
     rollAttemptsInBase: 0,
     consecutiveSixes: 0,
     skippedTurns: {},
+    superpowerUsed: {},
     legalPawnIds: [],
     duel: null,
     activity: null,

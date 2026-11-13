@@ -10,7 +10,7 @@ import {
   type RngFn,
 } from './helpers';
 import { computePushDestination } from './movement';
-import type { DuelState, GameState, Pawn, PawnLocation, PendingPostDuelEvent } from './types';
+import type { DuelRound, DuelState, GameState, Pawn, PawnLocation, PendingPostDuelEvent } from './types';
 
 export function createDuelState(params: {
   attackerPlayerIndex: number;
@@ -154,6 +154,19 @@ export function rollDuelDie(
   }
 
   const winner: 'attacker' | 'defender' = attackerRoll > defenderRoll ? 'attacker' : 'defender';
+  return finalizeDuelOutcome(state, winner, rounds, attackerRoll, defenderRoll);
+}
+
+export function finalizeDuelOutcome(
+  state: GameState,
+  winner: 'attacker' | 'defender',
+  rounds: DuelRound[],
+  attackerRoll: number,
+  defenderRoll: number
+): GameState {
+  const duel = state.duel;
+  if (!duel) return state;
+
   const loserPlayerIndex =
     winner === 'attacker' ? duel.defenderPlayerIndex : duel.attackerPlayerIndex;
   const loserPawnId = winner === 'attacker' ? duel.defenderPawnId : duel.attackerPawnId;

@@ -8,6 +8,11 @@ import {
   rollDice,
   rollDuelDie,
   selectPawn,
+  applyAutoWinDuelSuperpower,
+  applyInstantFinishSuperpower,
+  applyKickToDormSuperpower,
+  applyLoadedSixSuperpower,
+  applySwapSuperpower,
 } from './engine';
 import type { PlayerConfig } from './types';
 
@@ -452,5 +457,133 @@ describe('Mensch exmatrikuliere dich nicht - Game Engine', () => {
     state = acknowledgeActivity(state);
     expect(state.phase).toBe('WAIT_ROLL');
     expect(state.currentTurn).toBe(1);
+  });
+
+  it('ultra hardcore swap superpower swaps track pawns once per game without consuming roll', () => {
+    const players = twoPlayers().map((p, idx) =>
+      idx === 0 ? { ...p, superpower: 'swap' as const } : p
+    );
+    let state = createInitialState(players, { hardcore: false, duelMode: 'classic', ultraHardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 5 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 25 } };
+        return p;
+      }),
+    };
+
+    state = applySwapSuperpower(state, 0, 'rot-0', 'blau-0');
+    expect(state.phase).toBe('WAIT_ROLL');
+    expect(state.superpowerUsed?.[0]).toBe(true);
+    expect(state.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({ zone: 'track', index: 25 });
+    expect(state.pawns.find((p) => p.id === 'blau-0')?.location).toEqual({ zone: 'track', index: 5 });
+
+    // Second use in same game is ignored
+    const secondTry = applySwapSuperpower(state, 0, 'rot-0', 'blau-0');
+    expect(secondTry.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({ zone: 'track', index: 25 });
+  });
+
+  it('ultra hardcore instantFinish superpower sends pawn to next goal slot and can win the game', () => {
+    const players = twoPlayers().map((p, idx) =>
+      idx === 0 ? { ...p, superpower: 'instantFinish' as const } : p
+    );
+    let state = createInitialState(players, { hardcore: false, duelMode: 'classic', ultraHardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'goal', slot: 3 } };
+        if (p.id === 'rot-1') return { ...p, location: { zone: 'goal', slot: 2 } };
+        if (p.id === 'rot-2') return { ...p, location: { zone: 'goal', slot: 1 } };
+        return p;
+      }),
+    };
+
+    state = applyInstantFinishSuperpower(state, 0, 'rot-3');
+    expect(state.superpowerUsed?.[0]).toBe(true);
+    expect(state.pawns.find((p) => p.id === 'rot-3')?.location).toEqual({ zone: 'goal', slot: 0 });
+    expect(state.phase).toBe('GAME_OVER');
+    expect(state.winnerIndex).toBe(0);
+  });
+
+  it('ultra hardcore autoWinDuel superpower immediately wins active duel for attacker or defender', () => {
+    const players = twoPlayers().map((p, idx) =>
+      idx === 1 ? { ...p, superpower: 'autoWinDuel' as const } : p
+    );
+    let state = createInitialState(players, { hardcore: false, duelMode: 'classic', ultraHardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'rot-0') return { ...p, location: { zone: 'track', index: 4 } };
+        if (p.id === 'blau-0') return { ...p, location: { zone: 'track', index: 7 } };
+        return p;
+      }),
+    };
+
+    state = rollDice(state, seqRng([3]));
+    state = selectPawn(state, 'rot-0');
+    expect(state.phase).toBe('DUEL_ROLL');
+
+    // Defender (seat 1) uses autoWinDuel
+    state = applyAutoWinDuelSuperpower(state, 1);
+    expect(state.phase).toBe('DUEL_RESULT');
+    expect(state.duel?.winner).toBe('defender');
+    expect(state.superpowerUsed?.[1]).toBe(true);
+    expect(state.pawns.find((p) => p.id === 'rot-0')?.location).toEqual({ zone: 'base', slot: 0 });
+  });
+
+  it('ultra hardcore loadedSix superpower rolls a 6 on WAIT_ROLL once per game', () => {
+    const players = twoPlayers().map((p, idx) =>
+      idx === 0 ? { ...p, superpower: 'loadedSix' as const } : p
+    );
+    let state = createInitialState(players, { hardcore: false, duelMode: 'classic', ultraHardcore: true });
+
+    state = applyLoadedSixSuperpower(state, 0);
+    expect(state.superpowerUsed?.[0]).toBe(true);
+    expect(state.lastRoll).toBe(6);
+    expect(state.phase).toBe('SELECT_PAWN');
+  });
+
+  it('ultra hardcore resolves random superpower for any player when unset while keeping explicit picks', () => {
+    const players: PlayerConfig[] = [
+      { color: 'rot', name: 'Anna', seatType: 'human-local', active: true },
+      { color: 'blau', name: 'Bot1', seatType: 'bot', active: true },
+      { color: 'gelb', name: 'Bot2', seatType: 'bot', active: true, superpower: 'loadedSix' },
+      { color: 'gruen', name: 'P4', seatType: 'bot', active: false },
+    ];
+    // rng = 0.45 -> index floor(0.45 * 5) = 2 ('autoWinDuel')
+    const state = createInitialState(players, { ultraHardcore: true }, () => 0.45);
+    expect(state.players[0].superpower).toBe('autoWinDuel');
+    expect(state.players[1].superpower).toBe('autoWinDuel');
+    expect(state.players[2].superpower).toBe('loadedSix');
+  });
+
+  it('ultra hardcore kickToDorm superpower sends opponent track pawn back to base once per game', () => {
+    const players = twoPlayers().map((p, idx) =>
+      idx === 0 ? { ...p, superpower: 'kickToDorm' as const } : p
+    );
+    let state = createInitialState(players, { hardcore: false, duelMode: 'classic', ultraHardcore: true });
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) => {
+        if (p.id === 'blau-2') return { ...p, location: { zone: 'track', index: 30 } };
+        return p;
+      }),
+    };
+
+    state = applyKickToDormSuperpower(state, 0, 'blau-2');
+    expect(state.superpowerUsed?.[0]).toBe(true);
+    expect(state.pawns.find((p) => p.id === 'blau-2')?.location).toEqual({ zone: 'base', slot: 2 });
+    expect(state.eventLog.some((e) => e.type === 'exmatrikulation' && e.opponentIndex === 1)).toBe(true);
+
+    // Second use is ignored
+    state = {
+      ...state,
+      pawns: state.pawns.map((p) =>
+        p.id === 'blau-1' ? { ...p, location: { zone: 'track', index: 12 } } : p
+      ),
+    };
+    const secondTry = applyKickToDormSuperpower(state, 0, 'blau-1');
+    expect(secondTry.pawns.find((p) => p.id === 'blau-1')?.location).toEqual({ zone: 'track', index: 12 });
   });
 });

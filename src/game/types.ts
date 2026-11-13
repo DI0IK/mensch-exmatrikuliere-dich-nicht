@@ -17,6 +17,8 @@ export interface Pawn {
   location: PawnLocation;
 }
 
+export type SuperpowerType = 'swap' | 'instantFinish' | 'autoWinDuel' | 'loadedSix' | 'kickToDorm';
+
 export interface PlayerConfig {
   color: PlayerColor;
   name: string;
@@ -24,6 +26,7 @@ export interface PlayerConfig {
   active: boolean; // false if 2 or 3 player game and seat is unused
   major?: string;
   emoji?: string;
+  superpower?: SuperpowerType;
 }
 
 export type TurnPhase =
@@ -41,6 +44,7 @@ export type DuelMode = 'classic' | 'push';
 export interface GameSettings {
   hardcore: boolean;
   duelMode?: DuelMode;
+  ultraHardcore?: boolean;
 }
 
 export type PendingPostDuelEvent =
@@ -110,6 +114,7 @@ export interface GameLogEntry {
     | 'activity_good'
     | 'activity_bad'
     | 'turn_skipped'
+    | 'superpower'
     | 'win';
   playerIndex: number;
   opponentIndex?: number;
@@ -126,6 +131,7 @@ export interface GameState {
   rollAttemptsInBase: number; // 0..3 when all pawns are in base
   consecutiveSixes: number; // 0..3 for Hardcore 6-6-6 rule
   skippedTurns: Record<number, number>;
+  superpowerUsed?: Record<number, boolean>;
   legalPawnIds: string[];
   duel: DuelState | null;
   activity: ActivityState | null;
@@ -142,4 +148,9 @@ export type GameAction =
   | { type: 'SELECT_PAWN'; playerIndex: number; pawnId: string }
   | { type: 'DUEL_ROLL'; playerIndex: number }
   | { type: 'ACK_DUEL'; playerIndex: number }
-  | { type: 'ACK_ACTIVITY'; playerIndex: number };
+  | { type: 'ACK_ACTIVITY'; playerIndex: number }
+  | { type: 'USE_SWAP'; playerIndex: number; ownPawnId: string; targetPawnId: string }
+  | { type: 'USE_INSTANT_FINISH'; playerIndex: number; pawnId: string }
+  | { type: 'USE_AUTO_WIN_DUEL'; playerIndex: number }
+  | { type: 'USE_LOADED_SIX'; playerIndex: number }
+  | { type: 'USE_KICK_TO_DORM'; playerIndex: number; targetPawnId: string };

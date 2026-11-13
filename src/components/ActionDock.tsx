@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import type { GameLogEntry, GameState, Language } from '../game/types';
+import { canUseSuperpower, getPlayerSuperpower, SUPERPOWER_META } from '../game/superpowers';
+import type { GameAction, GameLogEntry, GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { IceTransportKind } from '../net/lobbyRoom';
 import { ConnectionInfoModal } from './ConnectionInfoModal';
@@ -16,6 +17,13 @@ interface ActionDockProps {
   connectedSeats: number[];
   disconnectedSeats: number[];
   onRoll: () => void;
+  onDispatchAction: (action: GameAction) => void;
+  isInstantFinishTargeting: boolean;
+  onToggleInstantFinishTargeting: () => void;
+  swapStep: 'own' | 'target' | null;
+  onToggleSwapTargeting: () => void;
+  isKickToDormTargeting: boolean;
+  onToggleKickToDormTargeting: () => void;
   onToggleLanguage: () => void;
   onToggleMute: () => void;
   onBackToLobby: () => void;
@@ -32,7 +40,9 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
       case 'immatrikulation':
         return `${player}: IMMATRIKULIERT!`;
       case 'exmatrikulation':
-        return `${player} exmatrikuliert ${opp} (${entry.detail})!`;
+        return entry.detail === 'kickToDorm'
+          ? `${opp}: EXMATRIKULIERT!`
+          : `${player} exmatrikuliert ${opp} (${entry.detail})!`;
       case 'duel_win':
         return `${player} besiegt ${opp} im 1v1-Duell (${entry.detail})!`;
       case 'duel_tie':
@@ -49,6 +59,8 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player}: Hardcore-Pech (${entry.detail})!`;
       case 'turn_skipped':
         return `${player} muss diese Runde aussetzen.`;
+      case 'superpower':
+        return `${player}: ⚡ Superkraft (${entry.detail})!`;
       default:
         return `${player}: ${entry.type}`;
     }
@@ -57,7 +69,9 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
       case 'immatrikulation':
         return `${player}: IMMATRICULATED!`;
       case 'exmatrikulation':
-        return `${player} exmatriculated ${opp} (${entry.detail})!`;
+        return entry.detail === 'kickToDorm'
+          ? `${opp}: EXMATRICULATED!`
+          : `${player} exmatriculated ${opp} (${entry.detail})!`;
       case 'duel_win':
         return `${player} beat ${opp} in 1v1 duel (${entry.detail})!`;
       case 'duel_tie':
@@ -74,6 +88,8 @@ function formatLogEntry(entry: GameLogEntry, state: GameState, language: Languag
         return `${player}: Hardcore unlucky (${entry.detail})!`;
       case 'turn_skipped':
         return `${player} skips this turn.`;
+      case 'superpower':
+        return `${player}: ⚡ Superpower (${entry.detail})!`;
       default:
         return `${player}: ${entry.type}`;
     }
@@ -91,6 +107,13 @@ export const ActionDock: React.FC<ActionDockProps> = ({
   connectedSeats,
   disconnectedSeats,
   onRoll,
+  onDispatchAction,
+  isInstantFinishTargeting,
+  onToggleInstantFinishTargeting,
+  swapStep,
+  onToggleSwapTargeting,
+  isKickToDormTargeting,
+  onToggleKickToDormTargeting,
   onToggleLanguage,
   onToggleMute,
   onBackToLobby,
@@ -172,6 +195,134 @@ export const ActionDock: React.FC<ActionDockProps> = ({
             )}
           </div>
         </div>
+
+        {/* Ultra Hardcore Superpower Activation */}
+        {(() => {
+          if (!state.settings.ultraHardcore || !canRoll || state.phase !== 'WAIT_ROLL') return null;
+          const sp = getPlayerSuperpower(state, state.currentTurn);
+          if (sp === 'autoWinDuel' || !canUseSuperpower(state, state.currentTurn, sp)) return null;
+          const meta = SUPERPOWER_META[sp];
+          const ownTrackPawns = state.pawns.filter(
+            (p) => p.playerIndex === state.currentTurn && p.location.zone === 'track'
+          );
+          const oppTrackPawns = state.pawns.filter(
+            (p) => p.playerIndex !== state.currentTurn && p.location.zone === 'track'
+          );
+          const ownNonGoalPawns = state.pawns.filter(
+            (p) => p.playerIndex === state.currentTurn && p.location.zone !== 'goal'
+          );
+
+          return (
+            <div
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1.5px solid #c99a2e',
+                background: '#fff9e6',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#7a5400' }}>
+                ⚡ {meta.icon} {meta.label[language]}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
+                {meta.description[language]}
+              </div>
+
+              {sp === 'loadedSix' && (
+                <button
+                  type="button"
+                  className="tactile-btn"
+                  style={{ fontSize: '0.82rem', padding: '6px 10px' }}
+                  onClick={() =>
+                    onDispatchAction({ type: 'USE_LOADED_SIX', playerIndex: state.currentTurn })
+                  }
+                >
+                  🎲 {language === 'de' ? 'Wunsch-Sechs einsetzen' : 'Use Loaded Six'}
+                </button>
+              )}
+
+              {sp === 'instantFinish' && ownNonGoalPawns.length > 0 && (
+                <button
+                  type="button"
+                  className="tactile-btn"
+                  style={{
+                    fontSize: '0.8rem',
+                    padding: '6px 10px',
+                    background: isInstantFinishTargeting ? '#ffe4b5' : undefined,
+                    borderColor: isInstantFinishTargeting ? '#c99a2e' : undefined,
+                  }}
+                  onClick={onToggleInstantFinishTargeting}
+                >
+                  {isInstantFinishTargeting
+                    ? `✕ ${language === 'de' ? 'Abbrechen (Figur auf Brett anklicken)' : 'Cancel (click a pawn on board)'}`
+                    : `🏁 ${language === 'de' ? 'Figur auf Brett wählen' : 'Click pawn on board'}`}
+                </button>
+              )}
+
+              {sp === 'swap' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {ownTrackPawns.length === 0 || oppTrackPawns.length === 0 ? (
+                    <span style={{ fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                      {language === 'de'
+                        ? 'Mindestens 1 eigene & 1 gegnerische Figur auf der Strecke nötig.'
+                        : 'Need at least 1 own & 1 opponent pawn on the track.'}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="tactile-btn"
+                      style={{
+                        fontSize: '0.8rem',
+                        padding: '6px 10px',
+                        background: swapStep ? '#ffe4b5' : undefined,
+                        borderColor: swapStep ? '#c99a2e' : undefined,
+                      }}
+                      onClick={onToggleSwapTargeting}
+                    >
+                      {swapStep === 'own'
+                        ? `✕ ${language === 'de' ? '1/2: Eigene Figur anklicken (Abbrechen)' : '1/2: Click your pawn (Cancel)'}`
+                        : swapStep === 'target'
+                          ? `✕ ${language === 'de' ? '2/2: Gegnerische Figur anklicken (Abbrechen)' : '2/2: Click opponent pawn (Cancel)'}`
+                          : `🔄 ${language === 'de' ? 'Figuren auf Brett tauschen' : 'Click pawns on board to swap'}`}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {sp === 'kickToDorm' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {oppTrackPawns.length === 0 ? (
+                    <span style={{ fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                      {language === 'de'
+                        ? 'Mindestens 1 gegnerische Figur auf der Strecke nötig.'
+                        : 'Need at least 1 opponent pawn on the track.'}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="tactile-btn"
+                      style={{
+                        fontSize: '0.8rem',
+                        padding: '6px 10px',
+                        background: isKickToDormTargeting ? '#ffe4b5' : undefined,
+                        borderColor: isKickToDormTargeting ? '#c99a2e' : undefined,
+                      }}
+                      onClick={onToggleKickToDormTargeting}
+                    >
+                      {isKickToDormTargeting
+                        ? `✕ ${language === 'de' ? 'Abbrechen (Gegner-Figur anklicken)' : 'Cancel (click opponent pawn)'}`
+                        : `🥾 ${language === 'de' ? 'Gegner-Figur auf Brett rauswerfen' : 'Click opponent pawn to kick'}`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <p
           style={{

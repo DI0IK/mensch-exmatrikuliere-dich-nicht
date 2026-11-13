@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { GameSettings, Language, PlayerConfig } from '../game/types';
+import { SUPERPOWER_LIST, SUPERPOWER_META } from '../game/superpowers';
+import type { GameSettings, Language, PlayerConfig, SuperpowerType } from '../game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../i18n/translations';
 import { GameModeSelector } from './lobby/GameModeSelector';
 import {
@@ -26,6 +27,7 @@ interface LobbyProps {
   guestName: string;
   guestMajor: string;
   guestEmoji: string;
+  guestSuperpower: SuperpowerType | 'random';
   guestConnected: boolean;
   guestConnecting: boolean;
   guestError: string | null;
@@ -34,6 +36,7 @@ interface LobbyProps {
   onChangeGuestName: (name: string) => void;
   onChangeGuestMajor: (major: string) => void;
   onChangeGuestEmoji: (emoji: string) => void;
+  onChangeGuestSuperpower: (superpower: SuperpowerType | 'random') => void;
   onToggleLanguage: () => void;
   onCloseRemoteSeat: (seatIndex: number) => void;
   onStartGame: () => void;
@@ -56,6 +59,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   guestName,
   guestMajor,
   guestEmoji,
+  guestSuperpower,
   guestConnected,
   guestConnecting,
   guestError,
@@ -64,6 +68,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   onChangeGuestName,
   onChangeGuestMajor,
   onChangeGuestEmoji,
+  onChangeGuestSuperpower,
   onToggleLanguage,
   onCloseRemoteSeat,
   onStartGame,
@@ -573,6 +578,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         onClick={() =>
                           updateSeat(idx, {
                             seatType: player.seatType === 'human-local' ? 'bot' : 'human-local',
+                            ...(player.seatType === 'human-local' ? { superpower: undefined } : {}),
                           })
                         }
                         style={{
@@ -751,6 +757,66 @@ export const Lobby: React.FC<LobbyProps> = ({
                           </button>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Ultra Hardcore Superpower Selector */}
+                {(isGuest ? lobbySettings?.ultraHardcore : settings.ultraHardcore) && player.active && (
+                  <div
+                    style={{
+                      paddingLeft: isGuest ? 0 : '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-muted)' }}>
+                      ⚡ {language === 'de' ? 'Superkraft:' : 'Superpower:'}
+                    </span>
+                    {canEditProfile ? (
+                      <select
+                        value={isMyGuestSeat ? guestSuperpower : (player.superpower ?? 'random')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (isMyGuestSeat) {
+                            onChangeGuestSuperpower(raw as SuperpowerType | 'random');
+                          } else {
+                            updateSeat(idx, {
+                              superpower: raw === 'random' ? undefined : (raw as SuperpowerType),
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbbba0',
+                          background: '#fff',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <option value="random">
+                          ❓ {language === 'de' ? 'Zufällig' : 'Random'}
+                        </option>
+                        {SUPERPOWER_LIST.map((sp) => (
+                          <option key={sp.id} value={sp.id}>
+                            {sp.icon} {sp.label[language]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                        {!player.superpower ? (
+                          <>❓ {language === 'de' ? 'Zufällig' : 'Random'}</>
+                        ) : (
+                          <>
+                            {SUPERPOWER_META[player.superpower].icon}{' '}
+                            {SUPERPOWER_META[player.superpower].label[language]}
+                          </>
+                        )}
+                      </span>
                     )}
                   </div>
                 )}
