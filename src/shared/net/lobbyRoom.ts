@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import { getIceServers } from './iceConfig';
-import type { NetMessage } from './webrtc';
+import type { NetMessage } from '../../games/medn/net/webrtc';
 
 export type IceTransportKind = 'local' | 'stun' | 'turn';
 
@@ -62,13 +62,13 @@ function peerIdFromCode(code: string): string {
   return `medn-${code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
 }
 
-export class LobbyHostRoom {
+export class LobbyHostRoom<TMsg = NetMessage> {
   private peer: Peer | null = null;
   private seatConns = new Map<number, DataConnection>();
   public readonly lobbyCode: string;
 
   private getOpenRemoteSeats: () => number[];
-  private onMessage: (seatIndex: number, msg: NetMessage) => void;
+  private onMessage: (seatIndex: number, msg: TMsg) => void;
   private onStatusChange: (seatIndex: number, connected: boolean) => void;
   private onRoomReady: (code: string) => void;
   private onRoomError: (err: string) => void;
@@ -76,7 +76,7 @@ export class LobbyHostRoom {
   constructor(opts: {
     lobbyCode?: string;
     getOpenRemoteSeats: () => number[];
-    onMessage: (seatIndex: number, msg: NetMessage) => void;
+    onMessage: (seatIndex: number, msg: TMsg) => void;
     onStatusChange: (seatIndex: number, connected: boolean) => void;
     onRoomReady: (code: string) => void;
     onRoomError: (err: string) => void;
@@ -124,7 +124,7 @@ export class LobbyHostRoom {
 
       conn.on('data', (data) => {
         if (data && typeof data === 'object') {
-          this.onMessage(assignedSeat, data as NetMessage);
+          this.onMessage(assignedSeat, data as TMsg);
         }
       });
 
@@ -144,14 +144,14 @@ export class LobbyHostRoom {
     });
   }
 
-  public sendToSeat(seatIndex: number, msg: NetMessage): void {
+  public sendToSeat(seatIndex: number, msg: TMsg): void {
     const conn = this.seatConns.get(seatIndex);
     if (conn && conn.open) {
       conn.send(msg);
     }
   }
 
-  public broadcast(msg: NetMessage): void {
+  public broadcast(msg: TMsg): void {
     for (const conn of this.seatConns.values()) {
       if (conn.open) {
         conn.send(msg);
@@ -191,15 +191,15 @@ export class LobbyHostRoom {
   }
 }
 
-export class LobbyGuestRoom {
+export class LobbyGuestRoom<TMsg = NetMessage> {
   private peer: Peer | null = null;
   private conn: DataConnection | null = null;
-  private onMessage: (msg: NetMessage) => void;
+  private onMessage: (msg: TMsg) => void;
   private onStatusChange: (connected: boolean) => void;
   private onError: (err: string) => void;
 
   constructor(opts: {
-    onMessage: (msg: NetMessage) => void;
+    onMessage: (msg: TMsg) => void;
     onStatusChange: (connected: boolean) => void;
     onError: (err: string) => void;
   }) {
@@ -231,7 +231,7 @@ export class LobbyGuestRoom {
 
       conn.on('data', (data) => {
         if (data && typeof data === 'object') {
-          this.onMessage(data as NetMessage);
+          this.onMessage(data as TMsg);
         }
       });
 
@@ -249,7 +249,7 @@ export class LobbyGuestRoom {
     });
   }
 
-  public send(msg: NetMessage): void {
+  public send(msg: TMsg): void {
     if (this.conn && this.conn.open) {
       this.conn.send(msg);
     }

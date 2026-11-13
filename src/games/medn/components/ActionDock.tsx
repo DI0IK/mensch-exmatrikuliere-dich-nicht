@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { canUseSuperpower, getPlayerSuperpower, SUPERPOWER_META } from '../game/superpowers';
 import type { GameAction, GameLogEntry, GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
-import type { IceTransportKind } from '../net/lobbyRoom';
+import type { IceTransportKind } from '../../../shared/net/lobbyRoom';
 import { ConnectionInfoModal } from './ConnectionInfoModal';
 import { DieFace } from './DieFace';
 

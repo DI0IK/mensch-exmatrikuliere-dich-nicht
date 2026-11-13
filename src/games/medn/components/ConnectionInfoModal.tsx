@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import type { GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
-import { getIceServers } from '../net/iceConfig';
-import type { IceTransportKind } from '../net/lobbyRoom';
+import { getIceServers } from '../../../shared/net/iceConfig';
+import type { IceTransportKind } from '../../../shared/net/lobbyRoom';
 
 interface ConnectionInfoModalProps {
   state: GameState;

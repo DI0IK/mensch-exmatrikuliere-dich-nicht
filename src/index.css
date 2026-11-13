@@ -309,3 +309,91 @@ select {
     gap: 6px;
   }
 }
+
+/* DHBW Karlsruhe Monopoly Board */
+.tactile-btn.success {
+  background: var(--stamp-green);
+  color: #fffaf3;
+}
+
+.tactile-btn.success:hover:not(:disabled) {
+  background: #287c4b;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: start;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 980px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.monopoly-board-frame {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 12px;
+  background: linear-gradient(145deg, #d5b88c 0%, #c19f6e 50%, #b08c5a 100%);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 250, 235, 0.55),
+    inset 0 -3px 6px rgba(35, 29, 23, 0.25),
+    6px 8px 0 rgba(35, 29, 23, 0.22);
+}
+
+.monopoly-board {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #e9e2ce;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 1.5fr repeat(9, 1fr) 1.5fr;
+  grid-template-rows: 1.5fr repeat(9, 1fr) 1.5fr;
+  overflow: hidden;
+  user-select: none;
+}
+
+.board-tile {
+  position: relative;
+  border: 1px solid rgba(35, 29, 23, 0.45);
+  background: #f6f0de;
+  display: flex;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.board-tile:hover {
+  background: #fffdf4;
+}
+
+.board-tile.mortgaged {
+  background: #ddd4bf;
+  opacity: 0.78;
+}
+
+.board-center {
+  grid-column: 2 / 11;
+  grid-row: 2 / 11;
+  position: relative;
+  background: radial-gradient(circle at 50% 45%, #f8f3e3 0%, #e7dec6 100%);
+  border: 1.5px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  gap: 10px;
+  text-align: center;
+  overflow: hidden;
+}

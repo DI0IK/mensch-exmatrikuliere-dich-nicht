@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SUPERPOWER_LIST, SUPERPOWER_META } from '../game/superpowers';
-import type { GameSettings, Language, PlayerConfig, SuperpowerType } from '../game/types';
-import { COLOR_LABELS, TRANSLATIONS } from '../i18n/translations';
-import { GameModeSelector } from './lobby/GameModeSelector';
+import { SUPERPOWER_LIST, SUPERPOWER_META } from '../../games/medn/game/superpowers';
+import type { GameSettings, Language, PlayerConfig, SuperpowerType } from '../../games/medn/game/types';
+import { COLOR_LABELS, TRANSLATIONS } from '../../games/medn/i18n/translations';
+import { GameModeSelector } from '../../games/medn/components/lobby/GameModeSelector';
 import {
   ALL_DEFAULT_NAMES,
   COLOR_HEX,
@@ -10,13 +10,13 @@ import {
   DEFAULT_NAMES,
   EMOJI_PRESETS,
   MAJOR_SUGGESTIONS,
-} from './lobby/types';
+} from '../../games/medn/components/lobby/types';
 
 interface LobbyProps {
   language: Language;
   players: PlayerConfig[];
-  settings: GameSettings;
-  lobbySettings: GameSettings | null;
+  settings?: GameSettings;
+  lobbySettings?: GameSettings | null;
   lobbyRoster: PlayerConfig[] | null;
   connectedSeats: number[];
   hostLobbyCode: string | null;
@@ -27,21 +27,26 @@ interface LobbyProps {
   guestName: string;
   guestMajor: string;
   guestEmoji: string;
-  guestSuperpower: SuperpowerType | 'random';
+  guestSuperpower?: SuperpowerType | 'random';
   guestConnected: boolean;
   guestConnecting: boolean;
   guestError: string | null;
   onChangePlayers: (players: PlayerConfig[]) => void;
-  onChangeSettings: (settings: GameSettings) => void;
+  onChangeSettings?: (settings: GameSettings) => void;
   onChangeGuestName: (name: string) => void;
   onChangeGuestMajor: (major: string) => void;
   onChangeGuestEmoji: (emoji: string) => void;
-  onChangeGuestSuperpower: (superpower: SuperpowerType | 'random') => void;
+  onChangeGuestSuperpower?: (superpower: SuperpowerType | 'random') => void;
   onToggleLanguage: () => void;
   onCloseRemoteSeat: (seatIndex: number) => void;
   onStartGame: () => void;
   onGuestJoinRoom: (roomCode: string) => void;
   onGuestLeave: () => void;
+  titleOverride?: string;
+  subtitleOverride?: string;
+  badgeOverride?: string;
+  startLabelOverride?: string;
+  customModeSelector?: React.ReactNode;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
@@ -74,6 +79,11 @@ export const Lobby: React.FC<LobbyProps> = ({
   onStartGame,
   onGuestJoinRoom,
   onGuestLeave,
+  titleOverride,
+  subtitleOverride,
+  badgeOverride,
+  startLabelOverride,
+  customModeSelector,
 }) => {
   const t = TRANSLATIONS[language];
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
@@ -157,7 +167,7 @@ export const Lobby: React.FC<LobbyProps> = ({
         >
           <div>
             <div className="stamp-badge stamp-exmatrikuliert" style={{ fontSize: '0.72rem', marginBottom: '8px' }}>
-              PO 2026 · {language === 'de' ? 'PRÜFUNGSAMT' : 'EXAM OFFICE'}
+              {badgeOverride ?? `PO 2026 · ${language === 'de' ? 'PRÜFUNGSAMT' : 'EXAM OFFICE'}`}
             </div>
             <h1
               style={{
@@ -168,10 +178,10 @@ export const Lobby: React.FC<LobbyProps> = ({
                 lineHeight: 1.1,
               }}
             >
-              {t.title}
+              {titleOverride ?? t.title}
             </h1>
             <p style={{ margin: '6px 0 0', color: 'var(--ink-muted)', fontSize: '0.94rem' }}>
-              {t.subtitle}
+              {subtitleOverride ?? t.subtitle}
             </p>
           </div>
 
@@ -762,7 +772,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                 )}
 
                 {/* Ultra Hardcore Superpower Selector */}
-                {(isGuest ? lobbySettings?.ultraHardcore : settings.ultraHardcore) && player.active && (
+                {!customModeSelector &&
+                  (isGuest ? lobbySettings?.ultraHardcore : settings?.ultraHardcore) &&
+                  player.active && (
                   <div
                     style={{
                       paddingLeft: isGuest ? 0 : '28px',
@@ -777,11 +789,11 @@ export const Lobby: React.FC<LobbyProps> = ({
                     </span>
                     {canEditProfile ? (
                       <select
-                        value={isMyGuestSeat ? guestSuperpower : (player.superpower ?? 'random')}
+                        value={isMyGuestSeat ? (guestSuperpower ?? 'random') : (player.superpower ?? 'random')}
                         onChange={(e) => {
                           const raw = e.target.value;
                           if (isMyGuestSeat) {
-                            onChangeGuestSuperpower(raw as SuperpowerType | 'random');
+                            onChangeGuestSuperpower?.(raw as SuperpowerType | 'random');
                           } else {
                             updateSeat(idx, {
                               superpower: raw === 'random' ? undefined : (raw as SuperpowerType),
@@ -851,13 +863,18 @@ export const Lobby: React.FC<LobbyProps> = ({
         </div>
 
         {/* Game Mode & Variant Flags */}
-        <GameModeSelector
-          language={language}
-          isGuest={isGuest}
-          settings={settings}
-          lobbySettings={lobbySettings}
-          onChangeSettings={onChangeSettings}
-        />
+        {customModeSelector ?? (
+          settings &&
+          onChangeSettings && (
+            <GameModeSelector
+              language={language}
+              isGuest={isGuest}
+              settings={settings}
+              lobbySettings={lobbySettings ?? null}
+              onChangeSettings={onChangeSettings}
+            />
+          )
+        )}
 
         {/* Start Game (Host) or Waiting Status (Guest) */}
         {isGuest ? (
@@ -881,7 +898,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             onClick={onStartGame}
             style={{ width: '100%', padding: '13px', fontSize: '1.05rem' }}
           >
-            {t.startGame}
+            {startLabelOverride ?? t.startGame}
           </button>
         )}
       </div>

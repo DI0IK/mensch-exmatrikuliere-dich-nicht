@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { sound } from '../audio/sound';
+import { sound } from '../../../shared/audio/sound';
 import { DEFAULT_NAMES } from '../components/lobby/types';
 import { chooseBestBotPawn, chooseBotSuperpowerAction } from '../game/bot';
 import {
@@ -23,7 +23,7 @@ import type {
   PlayerConfig,
   SuperpowerType,
 } from '../game/types';
-import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
+import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../../../shared/net/lobbyRoom';
 import type { NetMessage } from '../net/webrtc';
 
 const USERNAME_STORAGE_KEY = 'medn_username';
