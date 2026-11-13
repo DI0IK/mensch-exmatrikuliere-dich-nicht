@@ -65,6 +65,16 @@ export interface Translations {
   webrtcResetSeat: string;
   webrtcDisconnectedBanner: string;
   webrtcTakeOverBot: string;
+  lobbyCodeTitle: string;
+  lobbyCodeCopy: string;
+  lobbyCodeLinkCopy: string;
+  lobbyCodeJoinLabel: string;
+  lobbyCodeJoinPlaceholder: string;
+  lobbyCodeJoinBtn: string;
+  lobbyCodeConnecting: string;
+  manualFallbackToggle: string;
+  turnSettingsToggle: string;
+  turnSaved: string;
   copied: string;
   soundOn: string;
   soundOff: string;
@@ -130,6 +140,16 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     webrtcResetSeat: 'Trennen / Reset',
     webrtcDisconnectedBanner: 'Verbindung verloren:',
     webrtcTakeOverBot: 'Als Bot übernehmen',
+    lobbyCodeTitle: 'Lobby-Code für Online-Mitspieler',
+    lobbyCodeCopy: 'Code kopieren',
+    lobbyCodeLinkCopy: 'Beitritts-Link kopieren',
+    lobbyCodeJoinLabel: 'Lobby-Code',
+    lobbyCodeJoinPlaceholder: 'z.B. A7K9P2',
+    lobbyCodeJoinBtn: 'Lobby beitreten',
+    lobbyCodeConnecting: 'Verbinde mit Lobby…',
+    manualFallbackToggle: 'Manueller Offer/Answer-Fallback (ohne Signaling)',
+    turnSettingsToggle: 'Netzwerk / TURN-Server (optional bei Firewall/Eduroam)',
+    turnSaved: 'TURN-Einstellungen gespeichert!',
     copied: 'Kopiert!',
     soundOn: 'Ton an',
     soundOff: 'Ton aus',
@@ -193,6 +213,16 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     webrtcResetSeat: 'Disconnect / Reset',
     webrtcDisconnectedBanner: 'Connection lost:',
     webrtcTakeOverBot: 'Take over as Bot',
+    lobbyCodeTitle: 'Lobby Code for Online Players',
+    lobbyCodeCopy: 'Copy Code',
+    lobbyCodeLinkCopy: 'Copy Join Link',
+    lobbyCodeJoinLabel: 'Lobby Code',
+    lobbyCodeJoinPlaceholder: 'e.g. A7K9P2',
+    lobbyCodeJoinBtn: 'Join Lobby',
+    lobbyCodeConnecting: 'Connecting to lobby…',
+    manualFallbackToggle: 'Manual Offer/Answer fallback (no signaling)',
+    turnSettingsToggle: 'Network / TURN Server (optional for strict firewalls)',
+    turnSaved: 'TURN settings saved!',
     copied: 'Copied!',
     soundOn: 'Sound On',
     soundOff: 'Sound Off',

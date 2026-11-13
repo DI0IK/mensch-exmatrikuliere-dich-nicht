@@ -15,6 +15,7 @@ import {
   selectPawn,
 } from './game/engine';
 import type { GameAction, GameState, Language, PlayerConfig } from './game/types';
+import { LobbyGuestRoom, LobbyHostRoom } from './net/lobbyRoom';
 import { WebRTCGuestClient, WebRTCHostManager, type NetMessage } from './net/webrtc';
 
 const DEFAULT_PLAYERS: PlayerConfig[] = [
@@ -32,11 +33,11 @@ interface RemoteSlotUI {
   error: string | null;
 }
 
-function extractJoinHash(): string {
+function extractHashParam(prefix: string): string {
   if (typeof window === 'undefined') return '';
   const hash = window.location.hash;
-  if (hash.startsWith('#join=')) {
-    return hash.slice('#join='.length);
+  if (hash.startsWith(prefix)) {
+    return hash.slice(prefix.length);
   }
   return '';
 }
@@ -51,26 +52,42 @@ export function App() {
   // WebRTC Host state
   const [remoteSlots, setRemoteSlots] = useState<Record<number, RemoteSlotUI>>({});
   const [disconnectedSeats, setDisconnectedSeats] = useState<number[]>([]);
+  const [hostLobbyCode, setHostLobbyCode] = useState<string | null>(null);
+  const [hostLobbyError, setHostLobbyError] = useState<string | null>(null);
   const hostManagerRef = useRef<WebRTCHostManager | null>(null);
+  const lobbyHostRef = useRef<LobbyHostRoom | null>(null);
   const playersRef = useRef<PlayerConfig[]>(players);
   playersRef.current = players;
 
   // WebRTC Guest state
-  const [initialJoinCode] = useState<string>(() => extractJoinHash());
+  const [initialJoinCode] = useState<string>(() => extractHashParam('#join='));
+  const [initialRoomCode] = useState<string>(() => extractHashParam('#room='));
   const [guestName, setGuestName] = useState('Gast-Studi');
   const guestNameRef = useRef(guestName);
   guestNameRef.current = guestName;
   const [guestAnswerCode, setGuestAnswerCode] = useState('');
   const [guestConnected, setGuestConnected] = useState(false);
+  const [guestConnecting, setGuestConnecting] = useState(false);
   const [guestError, setGuestError] = useState<string | null>(null);
   const [guestSeat, setGuestSeat] = useState<number | null>(null);
   const [lobbyRoster, setLobbyRoster] = useState<PlayerConfig[] | null>(null);
   const guestClientRef = useRef<WebRTCGuestClient | null>(null);
+  const lobbyGuestRef = useRef<LobbyGuestRoom | null>(null);
 
   const isGuest = guestSeat !== null;
 
   const gameStateRef = useRef<GameState | null>(null);
   gameStateRef.current = gameState;
+
+  const broadcastAll = useCallback((msg: NetMessage) => {
+    hostManagerRef.current?.broadcast(msg);
+    lobbyHostRef.current?.broadcast(msg);
+  }, []);
+
+  const sendToSeatAll = useCallback((seatIndex: number, msg: NetMessage) => {
+    hostManagerRef.current?.sendToSeat(seatIndex, msg);
+    lobbyHostRef.current?.sendToSeat(seatIndex, msg);
+  }, []);
 
   const applyHostAction = useCallback((action: GameAction) => {
     setGameState((prev) => {
@@ -113,95 +130,136 @@ export function App() {
         sound.playVictory();
       }
 
-      hostManagerRef.current?.broadcast({ kind: 'STATE_SYNC', state: next });
+      broadcastAll({ kind: 'STATE_SYNC', state: next });
       return next;
     });
-  }, []);
+  }, [broadcastAll]);
 
-  // Initialize Host Manager lazily
+  const handleHostMessage = useCallback(
+    (seatIndex: number, msg: NetMessage) => {
+      if (msg.kind === 'PLAYER_ACTION' && msg.action.playerIndex === seatIndex) {
+        applyHostAction(msg.action);
+      } else if (msg.kind === 'SET_NAME') {
+        const cleanName = msg.name.trim().slice(0, 18);
+        if (!cleanName) return;
+        setPlayers((prev) => {
+          const nextPlayers = prev.map((p, i) =>
+            i === seatIndex ? { ...p, name: cleanName } : p
+          );
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          return nextPlayers;
+        });
+        setGameState((prev) => {
+          if (!prev) return prev;
+          const next: GameState = {
+            ...prev,
+            players: prev.players.map((p, i) =>
+              i === seatIndex ? { ...p, name: cleanName } : p
+            ),
+          };
+          broadcastAll({ kind: 'STATE_SYNC', state: next });
+          return next;
+        });
+      } else if (msg.kind === 'LEAVE_GAME') {
+        hostManagerRef.current?.closeSeat(seatIndex);
+        lobbyHostRef.current?.closeSeat(seatIndex);
+        setRemoteSlots((prev) => {
+          const next = { ...prev };
+          delete next[seatIndex];
+          return next;
+        });
+        setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
+        setGameState((prev) => {
+          if (!prev) return prev;
+          const next: GameState = {
+            ...prev,
+            players: prev.players.map((p, i) =>
+              i === seatIndex ? { ...p, seatType: 'bot' } : p
+            ),
+          };
+          broadcastAll({ kind: 'STATE_SYNC', state: next });
+          return next;
+        });
+      }
+    },
+    [applyHostAction, broadcastAll]
+  );
+
+  const handleHostStatusChange = useCallback(
+    (seatIndex: number, connected: boolean) => {
+      setRemoteSlots((prev) => ({
+        ...prev,
+        [seatIndex]: {
+          ...(prev[seatIndex] ?? {
+            offerCode: '',
+            answerInput: '',
+            creating: false,
+            error: null,
+          }),
+          connected,
+        },
+      }));
+      if (connected) {
+        setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
+        sendToSeatAll(seatIndex, {
+          kind: 'LOBBY_SYNC',
+          players: playersRef.current,
+        });
+        if (gameStateRef.current) {
+          sendToSeatAll(seatIndex, {
+            kind: 'STATE_SYNC',
+            state: gameStateRef.current,
+          });
+        }
+      } else if (gameStateRef.current) {
+        setDisconnectedSeats((prev) =>
+          prev.includes(seatIndex) ? prev : [...prev, seatIndex]
+        );
+      }
+    },
+    [sendToSeatAll]
+  );
+
+  // Auto-manage LobbyHostRoom when any active seat is Online (WebRTC)
+  const hasRemoteSeats = players.some((p) => p.active && p.seatType === 'human-remote');
+  useEffect(() => {
+    if (isGuest || !hasRemoteSeats) {
+      if (lobbyHostRef.current) {
+        lobbyHostRef.current.closeAll();
+        lobbyHostRef.current = null;
+        setHostLobbyCode(null);
+        setHostLobbyError(null);
+      }
+      return;
+    }
+
+    if (!lobbyHostRef.current) {
+      setHostLobbyError(null);
+      const room = new LobbyHostRoom({
+        getOpenRemoteSeats: () =>
+          playersRef.current
+            .map((p, idx) => (p.active && p.seatType === 'human-remote' ? idx : -1))
+            .filter((idx) => idx !== -1),
+        onMessage: handleHostMessage,
+        onStatusChange: handleHostStatusChange,
+        onRoomReady: (code) => setHostLobbyCode(code),
+        onRoomError: (err) => setHostLobbyError(err),
+      });
+      lobbyHostRef.current = room;
+      room.start();
+    }
+  }, [isGuest, hasRemoteSeats, handleHostMessage, handleHostStatusChange]);
+
+  // Initialize manual WebRTCHostManager lazily
   const ensureHostManager = useCallback(() => {
     if (!hostManagerRef.current) {
       hostManagerRef.current = new WebRTCHostManager(
-        (seatIndex, msg: NetMessage) => {
-          if (msg.kind === 'PLAYER_ACTION' && msg.action.playerIndex === seatIndex) {
-            applyHostAction(msg.action);
-          } else if (msg.kind === 'SET_NAME') {
-            const cleanName = msg.name.trim().slice(0, 18);
-            if (!cleanName) return;
-            setPlayers((prev) => {
-              const nextPlayers = prev.map((p, i) =>
-                i === seatIndex ? { ...p, name: cleanName } : p
-              );
-              hostManagerRef.current?.broadcast({ kind: 'LOBBY_SYNC', players: nextPlayers });
-              return nextPlayers;
-            });
-            setGameState((prev) => {
-              if (!prev) return prev;
-              const next: GameState = {
-                ...prev,
-                players: prev.players.map((p, i) =>
-                  i === seatIndex ? { ...p, name: cleanName } : p
-                ),
-              };
-              hostManagerRef.current?.broadcast({ kind: 'STATE_SYNC', state: next });
-              return next;
-            });
-          } else if (msg.kind === 'LEAVE_GAME') {
-            hostManagerRef.current?.closeSeat(seatIndex);
-            setRemoteSlots((prev) => {
-              const next = { ...prev };
-              delete next[seatIndex];
-              return next;
-            });
-            setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
-            setGameState((prev) => {
-              if (!prev) return prev;
-              const next: GameState = {
-                ...prev,
-                players: prev.players.map((p, i) =>
-                  i === seatIndex ? { ...p, seatType: 'bot' } : p
-                ),
-              };
-              hostManagerRef.current?.broadcast({ kind: 'STATE_SYNC', state: next });
-              return next;
-            });
-          }
-        },
-        (seatIndex, connected) => {
-          setRemoteSlots((prev) => ({
-            ...prev,
-            [seatIndex]: {
-              ...(prev[seatIndex] ?? {
-                offerCode: '',
-                answerInput: '',
-                creating: false,
-                error: null,
-              }),
-              connected,
-            },
-          }));
-          if (connected) {
-            setDisconnectedSeats((prev) => prev.filter((s) => s !== seatIndex));
-            hostManagerRef.current?.sendToSeat(seatIndex, {
-              kind: 'LOBBY_SYNC',
-              players: playersRef.current,
-            });
-            if (gameStateRef.current) {
-              hostManagerRef.current?.sendToSeat(seatIndex, {
-                kind: 'STATE_SYNC',
-                state: gameStateRef.current,
-              });
-            }
-          } else if (gameStateRef.current) {
-            setDisconnectedSeats((prev) =>
-              prev.includes(seatIndex) ? prev : [...prev, seatIndex]
-            );
-          }
-        }
+        handleHostMessage,
+        handleHostStatusChange
       );
     }
     return hostManagerRef.current;
-  }, [applyHostAction]);
+  }, [handleHostMessage, handleHostStatusChange]);
 
   const handleCreateOffer = async (seatIndex: number) => {
     const mgr = ensureHostManager();
@@ -295,10 +353,48 @@ export function App() {
     }
   };
 
+  const handleGuestJoinRoom = useCallback((roomCode: string) => {
+    setGuestError(null);
+    setGuestConnecting(true);
+    lobbyGuestRef.current?.close();
+    const client = new LobbyGuestRoom({
+      onMessage: (msg: NetMessage) => {
+        if (msg.kind === 'WELCOME') {
+          setGuestSeat(msg.assignedSeat);
+          if (msg.state) setGameState(msg.state);
+          const clean = guestNameRef.current.trim().slice(0, 18);
+          if (clean) {
+            client.send({ kind: 'SET_NAME', name: clean });
+          }
+        } else if (msg.kind === 'STATE_SYNC') {
+          setGameState(msg.state);
+        } else if (msg.kind === 'LOBBY_SYNC') {
+          setLobbyRoster(msg.players);
+        } else if (msg.kind === 'RETURN_TO_LOBBY') {
+          setGameState(null);
+        } else if (msg.kind === 'ROOM_ERROR') {
+          setGuestError(msg.message);
+          setGuestConnecting(false);
+        }
+      },
+      onStatusChange: (connected) => {
+        setGuestConnected(connected);
+        setGuestConnecting(false);
+      },
+      onError: (err) => {
+        setGuestError(err);
+        setGuestConnecting(false);
+      },
+    });
+    lobbyGuestRef.current = client;
+    client.join(roomCode);
+  }, []);
+
   const dispatchAction = useCallback(
     (action: GameAction) => {
       if (isGuest) {
         guestClientRef.current?.send({ kind: 'PLAYER_ACTION', action });
+        lobbyGuestRef.current?.send({ kind: 'PLAYER_ACTION', action });
       } else {
         applyHostAction(action);
       }
@@ -356,6 +452,7 @@ export function App() {
 
   const handleCloseRemoteSeat = (seatIndex: number) => {
     hostManagerRef.current?.closeSeat(seatIndex);
+    lobbyHostRef.current?.closeSeat(seatIndex);
     setRemoteSlots((prev) => {
       const next = { ...prev };
       delete next[seatIndex];
@@ -367,11 +464,15 @@ export function App() {
   const handleGuestLeave = () => {
     if (guestConnected) {
       guestClientRef.current?.send({ kind: 'LEAVE_GAME' });
+      lobbyGuestRef.current?.send({ kind: 'LEAVE_GAME' });
     }
     guestClientRef.current?.close();
     guestClientRef.current = null;
+    lobbyGuestRef.current?.close();
+    lobbyGuestRef.current = null;
     setGuestSeat(null);
     setGuestConnected(false);
+    setGuestConnecting(false);
     setGuestAnswerCode('');
     setGuestError(null);
     setLobbyRoster(null);
@@ -382,7 +483,7 @@ export function App() {
     if (isGuest) {
       handleGuestLeave();
     } else {
-      hostManagerRef.current?.broadcast({ kind: 'RETURN_TO_LOBBY' });
+      broadcastAll({ kind: 'RETURN_TO_LOBBY' });
       setDisconnectedSeats([]);
       setGameState(null);
     }
@@ -398,7 +499,7 @@ export function App() {
           i === seatIndex ? { ...p, seatType: 'bot' } : p
         ),
       };
-      hostManagerRef.current?.broadcast({ kind: 'STATE_SYNC', state: next });
+      broadcastAll({ kind: 'STATE_SYNC', state: next });
       return next;
     });
   };
@@ -407,7 +508,7 @@ export function App() {
     setDisconnectedSeats([]);
     const initial = createInitialState(players);
     setGameState(initial);
-    hostManagerRef.current?.broadcast({ kind: 'STATE_SYNC', state: initial });
+    broadcastAll({ kind: 'STATE_SYNC', state: initial });
   };
 
   const handleToggleMute = () => {
@@ -422,14 +523,18 @@ export function App() {
         players={players}
         lobbyRoster={lobbyRoster}
         remoteSlots={remoteSlots}
+        hostLobbyCode={hostLobbyCode}
+        hostLobbyError={hostLobbyError}
         initialJoinCode={initialJoinCode}
+        initialRoomCode={initialRoomCode}
         guestName={guestName}
         guestAnswerCode={guestAnswerCode}
         guestConnected={guestConnected}
+        guestConnecting={guestConnecting}
         guestError={guestError}
         onChangePlayers={(nextPlayers) => {
           setPlayers(nextPlayers);
-          hostManagerRef.current?.broadcast({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
         }}
         onChangeGuestName={(name) => {
           setGuestName(name);
@@ -437,6 +542,7 @@ export function App() {
             const clean = name.trim().slice(0, 18);
             if (clean) {
               guestClientRef.current?.send({ kind: 'SET_NAME', name: clean });
+              lobbyGuestRef.current?.send({ kind: 'SET_NAME', name: clean });
             }
           }
         }}
@@ -459,6 +565,7 @@ export function App() {
         }
         onCloseRemoteSeat={handleCloseRemoteSeat}
         onStartGame={handleStartGame}
+        onGuestJoinRoom={handleGuestJoinRoom}
         onGuestCreateAnswer={(code) => void handleGuestCreateAnswer(code)}
         onGuestLeave={handleGuestLeave}
       />

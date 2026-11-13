@@ -1,12 +1,6 @@
 import LZString from 'lz-string';
 import type { GameAction, GameState, PlayerConfig } from '../game/types';
-
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
-};
+import { getIceServers } from './iceConfig';
 
 export type NetMessage =
   | { kind: 'WELCOME'; assignedSeat: number; state: GameState | null }
@@ -15,6 +9,7 @@ export type NetMessage =
   | { kind: 'STATE_SYNC'; state: GameState }
   | { kind: 'RETURN_TO_LOBBY' }
   | { kind: 'LEAVE_GAME' }
+  | { kind: 'ROOM_ERROR'; message: string }
   | { kind: 'PLAYER_ACTION'; action: GameAction };
 
 interface SignalPayload {
@@ -78,7 +73,7 @@ export class WebRTCHostManager {
   public async createOfferForSeat(seatIndex: number): Promise<string> {
     this.closeSeat(seatIndex);
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection({ iceServers: getIceServers() });
     const channel = pc.createDataChannel('medn-game', { ordered: true });
 
     const slot: HostPeerSlot = {
@@ -177,7 +172,7 @@ export class WebRTCGuestClient {
     const payload = decodeSignal(offerCode);
     const assignedSeat = payload.seat ?? 1;
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc = new RTCPeerConnection({ iceServers: getIceServers() });
     this.pc = pc;
 
     pc.ondatachannel = (ev) => {
