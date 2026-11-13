@@ -26,6 +26,47 @@ function extractHashParam(prefix: string): string {
   return hash.startsWith(prefix) ? hash.slice(prefix.length) : '';
 }
 
+function playTransitionSounds(prev: GameState | null, next: GameState): void {
+  if (!prev) return;
+
+  if (next.phase === 'GAME_OVER' && prev.phase !== 'GAME_OVER') {
+    sound.playVictory();
+    return;
+  }
+  if (next.phase === 'DUEL_RESULT' && prev.phase !== 'DUEL_RESULT') {
+    sound.playDiceRoll();
+    sound.playStampThud();
+    return;
+  }
+  if (
+    prev.phase === 'DUEL_ROLL' &&
+    next.phase === 'DUEL_ROLL' &&
+    (next.duel?.rounds.length ?? 0) > (prev.duel?.rounds.length ?? 0)
+  ) {
+    sound.playDiceRoll();
+    return;
+  }
+  if (prev.phase === 'DUEL_RESULT' && next.phase !== 'DUEL_RESULT') {
+    sound.playPawnTap();
+    return;
+  }
+  if (
+    prev.phase === 'WAIT_ROLL' &&
+    (next.phase === 'SELECT_PAWN' ||
+      (next.phase === 'WAIT_ROLL' &&
+        (next.rollAttemptsInBase !== prev.rollAttemptsInBase ||
+          next.currentTurn !== prev.currentTurn ||
+          next.lastRoll !== prev.lastRoll ||
+          next.nextLogId !== prev.nextLogId)))
+  ) {
+    sound.playDiceRoll();
+    return;
+  }
+  if (prev.phase === 'SELECT_PAWN' && next.phase !== 'SELECT_PAWN') {
+    sound.playPawnTap();
+  }
+}
+
 export function useMultiplayerGame() {
   const [players, setPlayers] = useState<PlayerConfig[]>(DEFAULT_PLAYERS);
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -46,6 +87,12 @@ export function useMultiplayerGame() {
   const [guestName, setGuestName] = useState('Gast-Studi');
   const guestNameRef = useRef(guestName);
   guestNameRef.current = guestName;
+  const [guestMajor, setGuestMajor] = useState('');
+  const guestMajorRef = useRef(guestMajor);
+  guestMajorRef.current = guestMajor;
+  const [guestEmoji, setGuestEmoji] = useState('');
+  const guestEmojiRef = useRef(guestEmoji);
+  guestEmojiRef.current = guestEmoji;
   const [guestAnswerCode, setGuestAnswerCode] = useState('');
   const [guestConnected, setGuestConnected] = useState(false);
   const [guestConnecting, setGuestConnecting] = useState(false);
@@ -137,6 +184,39 @@ export function useMultiplayerGame() {
             ...prev,
             players: prev.players.map((p, i) =>
               i === seatIndex ? { ...p, name: cleanName } : p
+            ),
+          };
+          broadcastAll({ kind: 'STATE_SYNC', state: next });
+          return next;
+        });
+      } else if (msg.kind === 'SET_PROFILE') {
+        const cleanMajor = msg.major !== undefined ? msg.major.trim().slice(0, 28) : undefined;
+        const cleanEmoji = msg.emoji !== undefined ? msg.emoji.trim().slice(0, 8) : undefined;
+        setPlayers((prev) => {
+          const nextPlayers = prev.map((p, i) =>
+            i === seatIndex
+              ? {
+                  ...p,
+                  ...(cleanMajor !== undefined ? { major: cleanMajor } : {}),
+                  ...(cleanEmoji !== undefined ? { emoji: cleanEmoji } : {}),
+                }
+              : p
+          );
+          broadcastAll({ kind: 'LOBBY_SYNC', players: nextPlayers });
+          return nextPlayers;
+        });
+        setGameState((prev) => {
+          if (!prev) return prev;
+          const next: GameState = {
+            ...prev,
+            players: prev.players.map((p, i) =>
+              i === seatIndex
+                ? {
+                    ...p,
+                    ...(cleanMajor !== undefined ? { major: cleanMajor } : {}),
+                    ...(cleanEmoji !== undefined ? { emoji: cleanEmoji } : {}),
+                  }
+                : p
             ),
           };
           broadcastAll({ kind: 'STATE_SYNC', state: next });
@@ -340,13 +420,17 @@ export function useMultiplayerGame() {
   };
 
   const handleGuestCreateAnswer = useCallback(async (offerCode: string) => {
+    sound.unlock();
     setGuestError(null);
     try {
       if (!guestClientRef.current) {
         guestClientRef.current = new WebRTCGuestClient(
           (msg: NetMessage) => {
             if (msg.kind === 'STATE_SYNC') {
-              setGameState(msg.state);
+              setGameState((prev) => {
+                playTransitionSounds(prev, msg.state);
+                return msg.state;
+              });
             } else if (msg.kind === 'LOBBY_SYNC') {
               setLobbyRoster(msg.players);
             } else if (msg.kind === 'RETURN_TO_LOBBY') {
@@ -359,6 +443,13 @@ export function useMultiplayerGame() {
               const clean = guestNameRef.current.trim().slice(0, 18);
               if (clean) {
                 guestClientRef.current?.send({ kind: 'SET_NAME', name: clean });
+              }
+              if (guestMajorRef.current.trim() || guestEmojiRef.current.trim()) {
+                guestClientRef.current?.send({
+                  kind: 'SET_PROFILE',
+                  major: guestMajorRef.current,
+                  emoji: guestEmojiRef.current,
+                });
               }
             }
           }
@@ -374,6 +465,7 @@ export function useMultiplayerGame() {
   }, []);
 
   const handleGuestJoinRoom = useCallback((roomCode: string) => {
+    sound.unlock();
     setGuestError(null);
     setGuestConnecting(true);
     lobbyGuestRef.current?.close();
@@ -386,8 +478,18 @@ export function useMultiplayerGame() {
           if (clean) {
             client.send({ kind: 'SET_NAME', name: clean });
           }
+          if (guestMajorRef.current.trim() || guestEmojiRef.current.trim()) {
+            client.send({
+              kind: 'SET_PROFILE',
+              major: guestMajorRef.current,
+              emoji: guestEmojiRef.current,
+            });
+          }
         } else if (msg.kind === 'STATE_SYNC') {
-          setGameState(msg.state);
+          setGameState((prev) => {
+            playTransitionSounds(prev, msg.state);
+            return msg.state;
+          });
         } else if (msg.kind === 'LOBBY_SYNC') {
           setLobbyRoster(msg.players);
         } else if (msg.kind === 'RETURN_TO_LOBBY') {
@@ -413,6 +515,7 @@ export function useMultiplayerGame() {
   const dispatchAction = useCallback(
     (action: GameAction) => {
       if (isGuest) {
+        sound.unlock();
         guestClientRef.current?.send({ kind: 'PLAYER_ACTION', action });
         lobbyGuestRef.current?.send({ kind: 'PLAYER_ACTION', action });
       } else {
@@ -558,6 +661,24 @@ export function useMultiplayerGame() {
     }
   };
 
+  const updateGuestMajor = (major: string) => {
+    setGuestMajor(major);
+    if (guestConnected) {
+      const msg: NetMessage = { kind: 'SET_PROFILE', major };
+      guestClientRef.current?.send(msg);
+      lobbyGuestRef.current?.send(msg);
+    }
+  };
+
+  const updateGuestEmoji = (emoji: string) => {
+    setGuestEmoji(emoji);
+    if (guestConnected) {
+      const msg: NetMessage = { kind: 'SET_PROFILE', emoji };
+      guestClientRef.current?.send(msg);
+      lobbyGuestRef.current?.send(msg);
+    }
+  };
+
   const updateAnswerInput = (seatIndex: number, value: string) => {
     setRemoteSlots((prev) => ({
       ...prev,
@@ -585,6 +706,8 @@ export function useMultiplayerGame() {
     initialJoinCode,
     initialRoomCode,
     guestName,
+    guestMajor,
+    guestEmoji,
     guestAnswerCode,
     guestConnected,
     guestConnecting,
@@ -592,6 +715,8 @@ export function useMultiplayerGame() {
     lobbyRoster,
     updatePlayers,
     updateGuestName,
+    updateGuestMajor,
+    updateGuestEmoji,
     updateAnswerInput,
     handleCreateOffer,
     handleAcceptAnswer,

@@ -18,12 +18,16 @@ interface LobbyProps {
   initialJoinCode: string;
   initialRoomCode: string;
   guestName: string;
+  guestMajor: string;
+  guestEmoji: string;
   guestAnswerCode: string;
   guestConnected: boolean;
   guestConnecting: boolean;
   guestError: string | null;
   onChangePlayers: (players: PlayerConfig[]) => void;
   onChangeGuestName: (name: string) => void;
+  onChangeGuestMajor: (major: string) => void;
+  onChangeGuestEmoji: (emoji: string) => void;
   onToggleLanguage: () => void;
   onCreateOffer: (seatIndex: number) => void;
   onAcceptAnswer: (seatIndex: number, answerCode: string) => void;
@@ -46,12 +50,16 @@ export const Lobby: React.FC<LobbyProps> = ({
   initialJoinCode,
   initialRoomCode,
   guestName,
+  guestMajor,
+  guestEmoji,
   guestAnswerCode,
   guestConnected,
   guestConnecting,
   guestError,
   onChangePlayers,
   onChangeGuestName,
+  onChangeGuestMajor,
+  onChangeGuestEmoji,
   onToggleLanguage,
   onCreateOffer,
   onAcceptAnswer,
@@ -192,6 +200,8 @@ export const Lobby: React.FC<LobbyProps> = ({
             initialJoinCode={initialJoinCode}
             initialRoomCode={initialRoomCode}
             guestName={guestName}
+            guestMajor={guestMajor}
+            guestEmoji={guestEmoji}
             guestAnswerCode={guestAnswerCode}
             guestConnected={guestConnected}
             guestConnecting={guestConnecting}
@@ -199,6 +209,8 @@ export const Lobby: React.FC<LobbyProps> = ({
             copiedKey={copiedKey}
             onCopy={copyText}
             onChangeGuestName={onChangeGuestName}
+            onChangeGuestMajor={onChangeGuestMajor}
+            onChangeGuestEmoji={onChangeGuestEmoji}
             onGuestJoinRoom={onGuestJoinRoom}
             onGuestCreateAnswer={onGuestCreateAnswer}
             onGuestLeave={onGuestLeave}

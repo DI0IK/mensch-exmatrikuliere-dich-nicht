@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Language, PlayerConfig } from '../../game/types';
 import { TRANSLATIONS } from '../../i18n/translations';
-import { COLOR_HEX } from './types';
+import { COLOR_HEX, EMOJI_PRESETS, MAJOR_SUGGESTIONS } from './types';
 
 interface GuestJoinPanelProps {
   language: Language;
@@ -9,6 +9,8 @@ interface GuestJoinPanelProps {
   initialJoinCode: string;
   initialRoomCode: string;
   guestName: string;
+  guestMajor: string;
+  guestEmoji: string;
   guestAnswerCode: string;
   guestConnected: boolean;
   guestConnecting: boolean;
@@ -16,6 +18,8 @@ interface GuestJoinPanelProps {
   copiedKey: string | null;
   onCopy: (key: string, text: string) => void;
   onChangeGuestName: (name: string) => void;
+  onChangeGuestMajor: (major: string) => void;
+  onChangeGuestEmoji: (emoji: string) => void;
   onGuestJoinRoom: (roomCode: string) => void;
   onGuestCreateAnswer: (offerCode: string) => void;
   onGuestLeave: () => void;
@@ -27,6 +31,8 @@ export const GuestJoinPanel: React.FC<GuestJoinPanelProps> = ({
   initialJoinCode,
   initialRoomCode,
   guestName,
+  guestMajor,
+  guestEmoji,
   guestAnswerCode,
   guestConnected,
   guestConnecting,
@@ -34,6 +40,8 @@ export const GuestJoinPanel: React.FC<GuestJoinPanelProps> = ({
   copiedKey,
   onCopy,
   onChangeGuestName,
+  onChangeGuestMajor,
+  onChangeGuestEmoji,
   onGuestJoinRoom,
   onGuestCreateAnswer,
   onGuestLeave,
@@ -42,6 +50,7 @@ export const GuestJoinPanel: React.FC<GuestJoinPanelProps> = ({
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
   const [offerInput, setOfferInput] = useState(initialJoinCode);
   const [showManualGuest, setShowManualGuest] = useState(Boolean(initialJoinCode));
+  const [openEmojiPicker, setOpenEmojiPicker] = useState(false);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -63,6 +72,111 @@ export const GuestJoinPanel: React.FC<GuestJoinPanelProps> = ({
           }}
         />
       </label>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <datalist id="guest-study-major-suggestions">
+          {MAJOR_SUGGESTIONS[language].map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            list="guest-study-major-suggestions"
+            value={guestMajor}
+            maxLength={28}
+            placeholder={language === 'de' ? 'Studiengang (z. B. Informatik)…' : 'Field of study (e.g. CS)…'}
+            aria-label={language === 'de' ? 'Studiengang' : 'Field of study'}
+            onChange={(e) => onChangeGuestMajor(e.target.value)}
+            style={{
+              flex: '1 1 180px',
+              padding: '7px 10px',
+              borderRadius: '8px',
+              border: '1.5px solid #bfa988',
+              background: '#fff',
+              fontSize: '0.88rem',
+              minWidth: 0,
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <input
+              type="text"
+              value={guestEmoji}
+              placeholder="🎓"
+              maxLength={8}
+              aria-label={language === 'de' ? 'Spielfigur-Emoji' : 'Pawn emoji'}
+              title={language === 'de' ? 'Eigenes Emoji eingeben oder rechts auswählen' : 'Type any emoji or pick one'}
+              onChange={(e) => onChangeGuestEmoji(e.target.value)}
+              style={{
+                width: '48px',
+                textAlign: 'center',
+                padding: '6px 4px',
+                borderRadius: '8px',
+                border: '1.5px solid #bfa988',
+                background: '#fff',
+                fontSize: '1.1rem',
+                lineHeight: 1.2,
+              }}
+            />
+            <button
+              type="button"
+              className="tactile-btn"
+              onClick={() => setOpenEmojiPicker((v) => !v)}
+              aria-label={language === 'de' ? 'Emoji auswählen' : 'Choose emoji'}
+              title={language === 'de' ? 'Emoji auswählen' : 'Choose emoji'}
+              style={{
+                padding: '6px 8px',
+                fontSize: '0.78rem',
+                boxShadow: '0 2px 0 var(--ink)',
+              }}
+            >
+              {openEmojiPicker ? '▴' : '▾'}
+            </button>
+          </div>
+        </div>
+
+        {openEmojiPicker && (
+          <div
+            style={{
+              padding: '8px',
+              borderRadius: '8px',
+              border: '1.5px solid #cbbba0',
+              background: '#fbf7ee',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px',
+            }}
+          >
+            {EMOJI_PRESETS.map((em) => {
+              const isSelected = guestEmoji === em;
+              return (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => {
+                    onChangeGuestEmoji(em);
+                    setOpenEmojiPicker(false);
+                  }}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.15rem',
+                    borderRadius: '8px',
+                    border: isSelected ? '2px solid var(--ink)' : '1px solid #d5c6ae',
+                    background: isSelected ? '#fff' : '#fffdf7',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {em}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {guestConnected ? (
         <div
@@ -105,9 +219,13 @@ export const GuestJoinPanel: React.FC<GuestJoinPanelProps> = ({
                         border: '1.5px solid var(--ink)',
                       }}
                     />
-                    <strong>{p.name}</strong>
+                    <strong>
+                      {p.emoji ? `${p.emoji} ` : ''}
+                      {p.name}
+                    </strong>
                     <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem' }}>
-                      ({p.seatType === 'bot' ? 'Bot' : p.seatType === 'human-remote' ? 'P2P' : 'Host'})
+                      ({p.major?.trim() ? `${p.major.trim()} · ` : ''}
+                      {p.seatType === 'bot' ? 'Bot' : p.seatType === 'human-remote' ? 'P2P' : 'Host'})
                     </span>
                   </div>
                 ) : null

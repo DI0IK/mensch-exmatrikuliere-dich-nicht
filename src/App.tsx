@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { sound } from './audio/sound';
 import { ActionDock } from './components/ActionDock';
 import { DuelModal } from './components/DuelModal';
@@ -21,7 +21,57 @@ export function App() {
     setMuted(!muted);
   };
 
-  if (!game.gameState) {
+  const state = game.gameState;
+  const activeTurnSeat = state
+    ? state.phase === 'DUEL_ROLL' || state.phase === 'DUEL_RESULT'
+      ? state.duel?.attackerPlayerIndex ?? state.currentTurn
+      : state.currentTurn
+    : -1;
+
+  const canLocalAct = state !== null && game.localSeatIndices.includes(activeTurnSeat);
+  const canRoll = canLocalAct && state?.phase === 'WAIT_ROLL';
+
+  const triggerRoll = useCallback(() => {
+    if (!state || !canRoll || rollingAnim) return;
+    setRollingAnim(true);
+    window.setTimeout(() => {
+      setRollingAnim(false);
+      game.dispatchAction({ type: 'ROLL_DICE', playerIndex: state.currentTurn });
+    }, 240);
+  }, [state, canRoll, rollingAnim, game]);
+
+  useEffect(() => {
+    if (!state) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (e.repeat) return;
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (canRoll) {
+        e.preventDefault();
+        triggerRoll();
+      } else if (canLocalAct && state.phase === 'DUEL_ROLL') {
+        e.preventDefault();
+        game.dispatchAction({ type: 'DUEL_ROLL', playerIndex: activeTurnSeat });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state, canRoll, canLocalAct, activeTurnSeat, triggerRoll, game]);
+
+  if (!state) {
     return (
       <Lobby
         language={language}
@@ -33,12 +83,16 @@ export function App() {
         initialJoinCode={game.initialJoinCode}
         initialRoomCode={game.initialRoomCode}
         guestName={game.guestName}
+        guestMajor={game.guestMajor}
+        guestEmoji={game.guestEmoji}
         guestAnswerCode={game.guestAnswerCode}
         guestConnected={game.guestConnected}
         guestConnecting={game.guestConnecting}
         guestError={game.guestError}
         onChangePlayers={game.updatePlayers}
         onChangeGuestName={game.updateGuestName}
+        onChangeGuestMajor={game.updateGuestMajor}
+        onChangeGuestEmoji={game.updateGuestEmoji}
         onToggleLanguage={() => setLanguage((l) => (l === 'de' ? 'en' : 'de'))}
         onCreateOffer={(idx) => void game.handleCreateOffer(idx)}
         onAcceptAnswer={(idx, code) => void game.handleAcceptAnswer(idx, code)}
@@ -52,23 +106,8 @@ export function App() {
     );
   }
 
-  const state = game.gameState;
-  const activeTurnSeat =
-    state.phase === 'DUEL_ROLL' || state.phase === 'DUEL_RESULT'
-      ? state.duel?.attackerPlayerIndex ?? state.currentTurn
-      : state.currentTurn;
-
-  const canLocalAct = game.localSeatIndices.includes(activeTurnSeat);
-  const canRoll = canLocalAct && state.phase === 'WAIT_ROLL';
-
-  const triggerRoll = () => {
-    if (!canRoll || rollingAnim) return;
-    setRollingAnim(true);
-    window.setTimeout(() => {
-      setRollingAnim(false);
-      game.dispatchAction({ type: 'ROLL_DICE', playerIndex: state.currentTurn });
-    }, 240);
-  };
+  const canLocalActFinal = canLocalAct;
+  const canRollFinal = canRoll;
 
   return (
     <div className="app-shell">
@@ -83,7 +122,7 @@ export function App() {
           <GameBoard
             state={state}
             language={language}
-            canInteract={canLocalAct}
+            canInteract={canLocalActFinal}
             onSelectPawn={(pawnId) =>
               game.dispatchAction({
                 type: 'SELECT_PAWN',
@@ -97,7 +136,7 @@ export function App() {
         <ActionDock
           state={state}
           language={language}
-          canRoll={canRoll}
+          canRoll={canRollFinal}
           rolling={rollingAnim}
           muted={muted}
           isGuest={game.isGuest}

@@ -16,6 +16,10 @@ class SoundEngine {
     return this.ctx;
   }
 
+  public unlock(): void {
+    this.ensureCtx();
+  }
+
   public playDiceRoll(): void {
     const ctx = this.ensureCtx();
     if (!ctx) return;

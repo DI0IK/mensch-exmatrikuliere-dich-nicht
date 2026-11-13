@@ -101,6 +101,7 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
             fontWeight: 700,
             fontSize: '0.9rem',
             letterSpacing: '0.03em',
+            whiteSpace: 'nowrap',
             color:
               state.phase === 'DUEL_ROLL' || state.phase === 'DUEL_RESULT'
                 ? 'var(--stamp-red)'
@@ -134,8 +135,8 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
                 padding: '6px 10px',
                 borderRadius: '8px',
                 background: isActive ? COLOR_BG[player.color] : 'rgba(231, 220, 200, 0.45)',
-                border: isActive ? `2px solid ${COLOR_HEX[player.color]}` : '1.5px solid #c9ba9e',
-                transition: 'all 0.15s ease',
+                border: isActive ? `2px solid ${COLOR_HEX[player.color]}` : '2px solid #c9ba9e',
+                transition: 'border-color 0.15s ease, background-color 0.15s ease',
                 minWidth: 0,
               }}
             >
@@ -153,7 +154,15 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
                   {player.emoji ? `${player.emoji} ` : ''}
                   {player.name}
                 </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--ink-muted)' }}>
+                <div
+                  style={{
+                    fontSize: '0.7rem',
+                    color: 'var(--ink-muted)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
                   {player.major?.trim() ? `${player.major.trim()} · ` : ''}
                   {COLOR_LABELS[language][player.color]} ·{' '}
                   {player.seatType === 'bot'

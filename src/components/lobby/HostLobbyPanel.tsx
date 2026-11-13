@@ -1,47 +1,15 @@
 import React, { useState } from 'react';
-import type { Language, PlayerColor, PlayerConfig, SeatType } from '../../game/types';
+import type { Language, PlayerConfig, SeatType } from '../../game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../../i18n/translations';
-import { ALL_DEFAULT_NAMES, COLOR_HEX, DEFAULT_NAMES, type RemoteSlotUI } from './types';
-
-const DEFAULT_EMOJI: Record<PlayerColor, string> = {
-  rot: '💻',
-  blau: '⚖️',
-  gelb: '📈',
-  gruen: '🩺',
-};
-
-const MAJOR_SUGGESTIONS: Record<Language, string[]> = {
-  de: [
-    'Informatik',
-    'Jura',
-    'BWL',
-    'Medizin',
-    'Maschinenbau',
-    'Psychologie',
-    'Physik',
-    'Mathematik',
-    'Architektur',
-    'Lehramt',
-    'Biologie',
-    'Kunst',
-  ],
-  en: [
-    'Computer Science',
-    'Law',
-    'Business',
-    'Medicine',
-    'Mechanical Engineering',
-    'Psychology',
-    'Physics',
-    'Mathematics',
-    'Architecture',
-    'Education',
-    'Biology',
-    'Fine Arts',
-  ],
-};
-
-const EMOJI_PRESETS = ['🎓', '💻', '⚖️', '📈', '🩺', '⚙️', '🧠', '🔬', '📐', '🎨', '📚', '☕', '🍺', '🦉', '🚀', '⚡'];
+import {
+  ALL_DEFAULT_NAMES,
+  COLOR_HEX,
+  DEFAULT_EMOJI,
+  DEFAULT_NAMES,
+  EMOJI_PRESETS,
+  MAJOR_SUGGESTIONS,
+  type RemoteSlotUI,
+} from './types';
 
 interface HostLobbyPanelProps {
   language: Language;
@@ -261,8 +229,8 @@ export const HostLobbyPanel: React.FC<HostLobbyPanelProps> = ({
                 />
               </div>
 
-              {/* Study Major & Custom Emoji Picker */}
-              {player.active && (
+              {/* Study Major & Custom Emoji Picker (only for local players and bots, not remote players) */}
+              {player.active && player.seatType !== 'human-remote' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div
                     style={{

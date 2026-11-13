@@ -1,4 +1,4 @@
-import type { PlayerColor, SeatType } from '../../game/types';
+import type { Language, PlayerColor, SeatType } from '../../game/types';
 
 export interface RemoteSlotUI {
   offerCode: string;
@@ -22,3 +22,43 @@ export const COLOR_HEX: Record<PlayerColor, string> = {
   gelb: '#d69618',
   gruen: '#2b7a4b',
 };
+
+export const DEFAULT_EMOJI: Record<PlayerColor, string> = {
+  rot: '💻',
+  blau: '⚖️',
+  gelb: '📈',
+  gruen: '🩺',
+};
+
+export const MAJOR_SUGGESTIONS: Record<Language, string[]> = {
+  de: [
+    'Informatik',
+    'Jura',
+    'BWL',
+    'Medizin',
+    'Maschinenbau',
+    'Psychologie',
+    'Physik',
+    'Mathematik',
+    'Architektur',
+    'Lehramt',
+    'Biologie',
+    'Kunst',
+  ],
+  en: [
+    'Computer Science',
+    'Law',
+    'Business',
+    'Medicine',
+    'Mechanical Engineering',
+    'Psychology',
+    'Physics',
+    'Mathematics',
+    'Architecture',
+    'Education',
+    'Biology',
+    'Fine Arts',
+  ],
+};
+
+export const EMOJI_PRESETS = ['🎓', '💻', '⚖️', '📈', '🩺', '⚙️', '🧠', '🔬', '📐', '🎨', '📚', '☕', '🍺', '🦉', '🚀', '⚡'];
