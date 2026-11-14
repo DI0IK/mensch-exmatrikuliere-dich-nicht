@@ -1,6 +1,8 @@
 import type { GameDefinition } from '../shared/collection/types';
+import { KniffelApp } from './kniffel/KniffelApp';
 import { MednApp } from './medn/MednApp';
 import { MonopolyApp } from './monopoly/MonopolyApp';
+import { UnoApp } from './uno/UnoApp';
 
 export const GAME_COLLECTION: GameDefinition[] = [
   {
@@ -48,5 +50,51 @@ export const GAME_COLLECTION: GameDefinition[] = [
       en: 'CAMPUS EDITION',
     },
     component: MonopolyApp,
+  },
+  {
+    id: 'kniffel',
+    icon: '🎯',
+    title: {
+      de: 'ECTS-Kniffel',
+      en: 'ECTS Yahtzee',
+    },
+    subtitle: {
+      de: 'Würfle deinen Studienabschluss zusammen',
+      en: 'Roll your way to graduation',
+    },
+    description: {
+      de: 'Sammle ECTS-Punkte in 13 Modulen, sichere dir den Regelstudienzeit-Bonus und nutze im Prüfungsamt-Modus Spickzettel-Chips.',
+      en: 'Score ECTS credits across 13 modules, earn the Standard-Period Bonus, and spend Cheat-Sheet tokens in Exam Office mode.',
+    },
+    minPlayers: 2,
+    maxPlayers: 8,
+    badge: {
+      de: 'MODULHANDBUCH',
+      en: 'MODULE HANDBOOK',
+    },
+    component: KniffelApp,
+  },
+  {
+    id: 'uno',
+    icon: '🃏',
+    title: {
+      de: 'Prüfungs-UNO',
+      en: 'Exam UNO',
+    },
+    subtitle: {
+      de: 'Werde deine Prüfungsleistungen los',
+      en: 'Shed your exam cards before anyone else',
+    },
+    description: {
+      de: 'Lege Module nach Farbe oder Wert ab, stapele Nachschreibetermine (+2/+4) und überstehe im Härtefall-Modus Dekanat-Tausch und Plagiatsverdacht.',
+      en: 'Match modules by color or value, stack Retake (+2/+4) penalties, and survive Dean Swaps and Plagiarism Audits in Hardship mode.',
+    },
+    minPlayers: 2,
+    maxPlayers: 8,
+    badge: {
+      de: 'PRÜFUNGSORDNUNG',
+      en: 'EXAM RULES',
+    },
+    component: UnoApp,
   },
 ];

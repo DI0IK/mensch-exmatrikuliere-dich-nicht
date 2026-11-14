@@ -97,6 +97,10 @@ export function MonopolyApp({
         onGuestJoinRoom={engine.joinRoomAsGuest}
         onGuestLeave={engine.leaveGuestRoom}
         onBackToGames={onBackToGames}
+        minPlayers={engine.minPlayers}
+        maxPlayers={engine.maxPlayers}
+        onAddPlayer={() => engine.addPlayer('bot')}
+        onRemovePlayer={engine.removePlayer}
         titleOverride={t.title}
         subtitleOverride={t.subtitle}
         badgeOverride={`DHBW KARLSRUHE · ${language === 'de' ? 'ERZBERGERSTR. 121' : 'NORDSTADT CAMPUS'}`}

@@ -97,4 +97,60 @@ describe('BaseGameEngine', () => {
     expect(engine.getSnapshot().gameState).toBeNull();
     engine.destroy();
   });
+
+  it('adds, removes, and auto-adds remote seats up to maxPlayers', () => {
+    class MultiSeatMockEngine extends BaseGameEngine<TestState, TestAction, TestSettings> {
+      readonly gameId = 'mock-multi';
+      constructor() {
+        super({
+          defaultSettings: { target: 2 },
+          minPlayers: 2,
+          maxPlayers: 6,
+          autoConnect: false,
+        });
+      }
+      protected createInitialState(): TestState {
+        return { count: 0, currentTurn: 0, done: false };
+      }
+      protected isSeatAuthorized(state: TestState, actorSeat: number, action: TestAction): boolean {
+        return state.currentTurn === actorSeat && action.playerIndex === actorSeat;
+      }
+      protected reduceAction(state: TestState): TestState {
+        return state;
+      }
+      protected getBotTurnSeat(): number | null {
+        return null;
+      }
+      protected decideBotAction(): TestAction | null {
+        return null;
+      }
+    }
+
+    const engine = new MultiSeatMockEngine();
+    expect(engine.getSnapshot().players).toHaveLength(4);
+
+    // Add a 5th player
+    const addedIdx = engine.addPlayer('bot');
+    expect(addedIdx).toBe(4);
+    expect(engine.getSnapshot().players).toHaveLength(5);
+
+    // Make all existing seats local humans so no bot/remote seat is free
+    engine.setPlayers(
+      engine.getSnapshot().players.map((p) => ({ ...p, seatType: 'human-local' as const }))
+    );
+
+    // Calling getOpenRemoteSeats() should auto-add a 6th 'human-remote' seat
+    const open = engine.getOpenRemoteSeats();
+    expect(open).toEqual([5]);
+    expect(engine.getSnapshot().players).toHaveLength(6);
+    expect(engine.getSnapshot().players[5].seatType).toBe('human-remote');
+
+    // Remove seats back down to minPlayers (2), cannot remove below minPlayers
+    engine.removePlayer(5);
+    expect(engine.getSnapshot().players).toHaveLength(5);
+    engine.removePlayer(0); // cannot remove index < minPlayers
+    expect(engine.getSnapshot().players).toHaveLength(5);
+
+    engine.destroy();
+  });
 });

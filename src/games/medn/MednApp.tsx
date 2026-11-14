@@ -141,6 +141,10 @@ export function MednApp({
         onGuestJoinRoom={engine.joinRoomAsGuest}
         onGuestLeave={engine.leaveGuestRoom}
         onBackToGames={onBackToGames}
+        minPlayers={engine.minPlayers}
+        maxPlayers={engine.maxPlayers}
+        onAddPlayer={() => engine.addPlayer('bot')}
+        onRemovePlayer={engine.removePlayer}
         titleOverride={t.title}
         subtitleOverride={t.subtitle}
         startLabelOverride={t.startGame}

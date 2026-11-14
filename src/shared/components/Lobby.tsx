@@ -3,7 +3,6 @@ import { buildJoinUrl, type GameId } from '../net/joinLink';
 import {
   ALL_DEFAULT_NAMES,
   COLOR_HEX,
-  COLOR_LABELS,
   DEFAULT_EMOJI,
   DEFAULT_NAMES,
   EMOJI_PRESETS,
@@ -56,6 +55,10 @@ interface LobbyProps<TPlayer extends BasePlayerConfig = BasePlayerConfig> {
   customModeSelector?: React.ReactNode;
   renderSeatExtra?: (ctx: SeatExtraContext<TPlayer>) => React.ReactNode;
   gameId?: GameId;
+  minPlayers?: number;
+  maxPlayers?: number;
+  onAddPlayer?: () => void;
+  onRemovePlayer?: (index: number) => void;
 }
 
 export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
@@ -91,6 +94,10 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
   customModeSelector,
   renderSeatExtra,
   gameId = 'medn',
+  minPlayers = 2,
+  maxPlayers = players.length,
+  onAddPlayer,
+  onRemovePlayer,
 }: LobbyProps<TPlayer>) {
   const t = LOBBY_TRANSLATIONS[language];
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
@@ -478,7 +485,6 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
             if (isGuest && !player.active) return null;
 
             const isMyGuestSeat = isGuest && guestSeat === idx;
-            const canDisable = !isGuest && (!player.active || activeCount > 2);
             const isRemoteConnected = !isGuest && connectedSet.has(idx);
             const canEditProfile = (!isGuest && player.active && player.seatType !== 'human-remote') || isMyGuestSeat;
 
@@ -488,7 +494,7 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
 
             return (
               <div
-                key={player.color}
+                key={idx}
                 style={{
                   padding: '12px',
                   borderRadius: '10px',
@@ -509,22 +515,11 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: isGuest ? '1fr auto auto' : 'auto 1fr auto auto',
+                    gridTemplateColumns: '1fr auto auto',
                     alignItems: 'center',
                     gap: '10px',
                   }}
                 >
-                  {!isGuest && (
-                    <input
-                      type="checkbox"
-                      checked={player.active}
-                      disabled={!canDisable}
-                      onChange={(e) => updateSeat(idx, { active: e.target.checked })}
-                      aria-label={`${COLOR_LABELS[language][player.color]} aktiv`}
-                      style={{ width: 18, height: 18, accentColor: COLOR_HEX[player.color] }}
-                    />
-                  )}
-
                   {!isGuest || isMyGuestSeat ? (
                     <input
                       type="text"
@@ -659,15 +654,47 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
                     </span>
                   )}
 
-                  <span
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: '50%',
-                      background: COLOR_HEX[player.color],
-                      border: '2px solid var(--ink)',
-                    }}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: COLOR_HEX[player.color],
+                        border: '2px solid var(--ink)',
+                      }}
+                    />
+                    {!isGuest &&
+                      idx >= minPlayers &&
+                      displayPlayers.length > minPlayers &&
+                      onRemovePlayer &&
+                      !connectedSeats.some((s) => s >= idx) && (
+                        <button
+                          type="button"
+                          onClick={() => onRemovePlayer(idx)}
+                          aria-label={language === 'de' ? 'Spieler entfernen' : 'Remove player'}
+                          title={language === 'de' ? 'Spieler entfernen' : 'Remove player'}
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: '6px',
+                            border: '1.5px solid #cbbba0',
+                            background: '#fff',
+                            color: 'var(--stamp-red)',
+                            fontWeight: 800,
+                            fontSize: '0.88rem',
+                            lineHeight: 1,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                  </div>
                 </div>
 
                 {/* Study Major & Custom Emoji Picker */}
@@ -678,7 +705,6 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        paddingLeft: isGuest ? 0 : '28px',
                         flexWrap: 'wrap',
                       }}
                     >
@@ -820,6 +846,36 @@ export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
               </div>
             );
           })}
+
+          {!isGuest && displayPlayers.length < maxPlayers && onAddPlayer && (
+            <button
+              type="button"
+              onClick={onAddPlayer}
+              aria-label={language === 'de' ? 'Spieler hinzufügen' : 'Add player'}
+              style={{
+                padding: '18px 12px',
+                borderRadius: '10px',
+                border: '2px dashed #bfa988',
+                background: 'rgba(251, 244, 230, 0.55)',
+                color: 'var(--ink-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.96rem',
+                transition: 'border-color 0.15s ease, background 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '1.45rem', lineHeight: 1, fontWeight: 800 }}>+</span>
+              <span>
+                {language === 'de'
+                  ? `Spieler hinzufügen (${displayPlayers.length}/${maxPlayers})`
+                  : `Add Player (${displayPlayers.length}/${maxPlayers})`}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Game Mode & Variant Flags */}

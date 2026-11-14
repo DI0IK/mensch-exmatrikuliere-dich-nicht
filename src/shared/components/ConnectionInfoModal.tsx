@@ -173,7 +173,7 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
                     : 'Local';
             return (
               <div
-                key={p.color}
+                key={idx}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',

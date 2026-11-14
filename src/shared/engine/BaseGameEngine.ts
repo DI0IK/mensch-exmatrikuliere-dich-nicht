@@ -1,8 +1,12 @@
 import {
   DEFAULT_BASE_PLAYERS,
   DEFAULT_NAMES,
+  EMOJI_PRESETS,
+  MAJOR_SUGGESTIONS,
   type BaseNetMessage,
   type BasePlayerConfig,
+  type PlayerColor,
+  type SeatType,
 } from '../types/game';
 import { extractRoomCodeFromHash } from '../net/joinLink';
 import { type IceTransportKind, LobbyGuestRoom, LobbyHostRoom } from '../net/lobbyRoom';
@@ -32,6 +36,8 @@ export interface EngineSnapshot<
   guestError: string | null;
   lobbyRoster: TPlayer[] | null;
   seatTransports: Record<number, IceTransportKind>;
+  minPlayers: number;
+  maxPlayers: number;
 }
 
 export interface BaseGameEngineOptions<
@@ -40,6 +46,8 @@ export interface BaseGameEngineOptions<
 > {
   defaultSettings: TSettings;
   defaultPlayers?: TPlayer[];
+  minPlayers?: number;
+  maxPlayers?: number;
   autoConnect?: boolean;
 }
 
@@ -81,10 +89,16 @@ export abstract class BaseGameEngine<
   private snapshotCache: EngineSnapshot<TState, TSettings, TPlayer> | null = null;
   private destroyed = false;
   private readonly autoConnect: boolean;
+  private readonly defaultPlayers: TPlayer[];
+  public readonly minPlayers: number;
+  public readonly maxPlayers: number;
 
   constructor(options: BaseGameEngineOptions<TSettings, TPlayer>) {
     const saved = loadSavedProfile();
     const basePlayers = options.defaultPlayers ?? (DEFAULT_BASE_PLAYERS as TPlayer[]);
+    this.defaultPlayers = basePlayers.map((p) => ({ ...p }));
+    this.minPlayers = options.minPlayers ?? 2;
+    this.maxPlayers = options.maxPlayers ?? basePlayers.length;
     this.players = basePlayers.map((p, idx) =>
       idx === 0
         ? {
@@ -172,6 +186,8 @@ export abstract class BaseGameEngine<
         guestError: this.guestError,
         lobbyRoster: this.lobbyRoster,
         seatTransports: this.seatTransports,
+        minPlayers: this.minPlayers,
+        maxPlayers: this.maxPlayers,
       };
     }
     return this.snapshotCache;
@@ -192,6 +208,81 @@ export abstract class BaseGameEngine<
     if (host) {
       saveProfile({ name: host.name, major: host.major, emoji: host.emoji });
     }
+    this.hostRoom?.broadcast({
+      kind: 'LOBBY_SYNC',
+      players: this.players,
+      settings: this.settings,
+    });
+    this.emit();
+  };
+
+  public addPlayer = (seatType: SeatType = 'bot'): number | null => {
+    if (this.isGuest || this.gameState) return null;
+    if (this.players.length >= this.maxPlayers) return null;
+
+    const idx = this.players.length;
+    const usedNames = new Set(this.players.map((p) => p.name));
+    const defaultSeat = this.defaultPlayers[idx];
+
+    let newPlayer: TPlayer;
+    if (defaultSeat && !usedNames.has(defaultSeat.name)) {
+      newPlayer = {
+        ...defaultSeat,
+        seatType,
+        active: true,
+      };
+    } else {
+      const colors: PlayerColor[] = ['rot', 'blau', 'gelb', 'gruen'];
+      const color = colors[idx % colors.length];
+      const extraBotPresets = [
+        { name: 'Maschbau-Max', major: 'Maschinenbau', emoji: '⚙️' },
+        { name: 'Psych-Mia', major: 'Psychologie', emoji: '🧠' },
+        { name: 'Physik-Finn', major: 'Physik', emoji: '🔬' },
+        { name: 'Mathe-Lena', major: 'Mathematik', emoji: '📐' },
+      ];
+      const preset =
+        seatType === 'bot' && idx >= this.defaultPlayers.length
+          ? extraBotPresets[(idx - this.defaultPlayers.length) % extraBotPresets.length]
+          : null;
+      const pool = DEFAULT_NAMES[seatType];
+      const fallbackName =
+        seatType === 'human-remote'
+          ? `Online-Studi ${idx + 1}`
+          : seatType === 'human-local'
+            ? `Studi ${idx + 1}`
+            : `Bot ${idx + 1}`;
+      const name =
+        preset && !usedNames.has(preset.name)
+          ? preset.name
+          : (pool.find((n) => !usedNames.has(n)) ?? fallbackName);
+
+      newPlayer = {
+        color,
+        name,
+        seatType,
+        active: true,
+        major: preset?.major ?? MAJOR_SUGGESTIONS.de[idx % MAJOR_SUGGESTIONS.de.length],
+        emoji: preset?.emoji ?? EMOJI_PRESETS[idx % EMOJI_PRESETS.length],
+      } as TPlayer;
+    }
+
+    this.players = [...this.players, newPlayer];
+    this.hostRoom?.broadcast({
+      kind: 'LOBBY_SYNC',
+      players: this.players,
+      settings: this.settings,
+    });
+    this.emit();
+    return idx;
+  };
+
+  public removePlayer = (index: number): void => {
+    if (this.isGuest || this.gameState) return;
+    if (this.players.length <= this.minPlayers) return;
+    if (index < this.minPlayers || index >= this.players.length) return;
+    if (this.connectedSeats.some((s) => s >= index)) return;
+
+    this.players = this.players.filter((_, idx) => idx !== index);
     this.hostRoom?.broadcast({
       kind: 'LOBBY_SYNC',
       players: this.players,
@@ -361,7 +452,16 @@ export abstract class BaseGameEngine<
       .map((p, idx) => (idx > 0 && p.active && p.seatType === 'bot' ? idx : -1))
       .filter((idx) => idx >= 0);
 
-    return [...remoteSeats, ...botSeats];
+    const candidates = [...remoteSeats, ...botSeats];
+    const hasFreeCandidate = candidates.some((idx) => !this.connectedSeats.includes(idx));
+    if (!hasFreeCandidate && this.players.length < this.maxPlayers) {
+      const addedIdx = this.addPlayer('human-remote');
+      if (addedIdx !== null) {
+        return [...candidates, addedIdx];
+      }
+    }
+
+    return candidates;
   };
 
   private initHostRoom(): void {

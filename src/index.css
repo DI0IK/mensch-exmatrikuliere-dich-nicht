@@ -397,3 +397,67 @@ select {
   text-align: center;
   overflow: hidden;
 }
+
+/* Prüfungs-UNO Animations */
+@keyframes unoCardLand {
+  0% {
+    opacity: 0.45;
+    transform: translateY(-22px) scale(1.16) rotate(-10deg);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.98) rotate(1.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+.uno-card-land {
+  animation: unoCardLand 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes unoCardDraw {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.uno-card-draw {
+  animation: unoCardDraw 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes unoTurnPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(35, 29, 23, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(214, 150, 24, 0.26);
+  }
+}
+
+.uno-turn-pulse {
+  animation: unoTurnPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes unoBannerPop {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.uno-banner-pop {
+  animation: unoBannerPop 0.25s ease-out;
+}
