@@ -1,13 +1,17 @@
 import { BOARD_TILES, JAIL_FINE } from './boardData';
 import {
-  canBuildOnTile,
-  canMortgageTile,
-  canSellOnTile,
-  canUnmortgageTile,
-  getUnmortgageCost,
-  ownsFullGroup,
-} from './helpers';
-import { computeBotAuctionBid, evaluateTradeForBot } from './trading';
+  computeLookaheadDanger,
+  evaluateTileStrategicValue,
+  hasUnderdevelopedMonopoly,
+  isBlockingOpponentGroup,
+  isCompletingOwnGroup,
+  pickBestBuildTile,
+  pickBestMortgageTile,
+  pickBestSellHouseTile,
+  pickBestUnmortgageTile,
+  shouldStayInJail,
+} from './botStrategy';
+import { computeBotAuctionBid, evaluateTradeForBot, findBestBotTradeOffer } from './trading';
 import type { GameAction, GameState } from './types';
 
 export function decideBotAction(state: GameState, botIndex: number): GameAction | null {
@@ -34,11 +38,11 @@ export function decideBotAction(state: GameState, botIndex: number): GameAction 
 
   switch (state.phase) {
     case 'WAIT_ROLL': {
-      if (bot.inJail) {
+      if (bot.inJail && !shouldStayInJail(state, botIndex)) {
         if (bot.jailCards > 0) {
           return { type: 'USE_JAIL_CARD' };
         }
-        if (bot.cash >= JAIL_FINE + 200 && state.turnCount < 25) {
+        if (bot.cash >= JAIL_FINE + 60) {
           return { type: 'PAY_JAIL' };
         }
       }
@@ -50,18 +54,21 @@ export function decideBotAction(state: GameState, botIndex: number): GameAction 
       if (tileIdx === null) return { type: 'DECLINE_PROPERTY' };
       const tile = BOARD_TILES[tileIdx];
       const price = tile?.price ?? 0;
+      if (bot.cash < price) return { type: 'DECLINE_PROPERTY' };
 
-      let completesGroup = false;
-      if (tile?.group) {
-        const groupTiles = BOARD_TILES.filter((t) => t.group === tile.group);
-        const owned = groupTiles.filter(
-          (t) => state.properties[t.index]?.ownerIndex === botIndex
-        ).length;
-        completesGroup = owned === groupTiles.length - 1;
+      const completesOrBlocks =
+        isCompletingOwnGroup(state, tileIdx, botIndex) ||
+        isBlockingOpponentGroup(state, tileIdx, botIndex);
+
+      const dynamicReserve = completesOrBlocks
+        ? 20
+        : Math.min(180, computeLookaheadDanger(state, botIndex));
+
+      const strategicValue = evaluateTileStrategicValue(state, tileIdx, botIndex);
+      if (bot.cash - price >= dynamicReserve || (completesOrBlocks && bot.cash >= price)) {
+        return { type: 'BUY_PROPERTY' };
       }
-
-      const reserve = completesGroup ? 40 : state.turnCount > 25 ? 250 : 120;
-      if (bot.cash - price >= reserve) {
+      if (strategicValue >= price * 1.25 && bot.cash - price >= 40) {
         return { type: 'BUY_PROPERTY' };
       }
       return { type: 'DECLINE_PROPERTY' };
@@ -72,50 +79,49 @@ export function decideBotAction(state: GameState, botIndex: number): GameAction 
     }
 
     case 'DEBT_RECOVERY': {
-      // First sell houses evenly
-      for (const tile of BOARD_TILES) {
-        if (canSellOnTile(state, botIndex, tile.index)) {
-          return { type: 'SELL_HOUSE', tileIndex: tile.index };
-        }
+      // First mortgage dead singletons / non-monopolies before selling houses on monopolies
+      const mortgageCandidate = pickBestMortgageTile(state, botIndex, false);
+      if (mortgageCandidate) {
+        return { type: 'TOGGLE_MORTGAGE', tileIndex: mortgageCandidate.index };
       }
-      // Then mortgage non-monopoly properties first
-      for (const tile of BOARD_TILES) {
-        if (
-          canMortgageTile(state, botIndex, tile.index) &&
-          (!tile.group || !ownsFullGroup(state.properties, botIndex, tile.group))
-        ) {
-          return { type: 'TOGGLE_MORTGAGE', tileIndex: tile.index };
-        }
-      }
-      // Then mortgage any remaining property
-      for (const tile of BOARD_TILES) {
-        if (canMortgageTile(state, botIndex, tile.index)) {
-          return { type: 'TOGGLE_MORTGAGE', tileIndex: tile.index };
-        }
+      const sellTile = pickBestSellHouseTile(state, botIndex);
+      if (sellTile) {
+        return { type: 'SELL_HOUSE', tileIndex: sellTile.index };
       }
       return { type: 'DECLARE_BANKRUPTCY' };
     }
 
     case 'TURN_ACTION': {
-      const reserve = state.turnCount > 25 ? 240 : 160;
+      const reserve = computeLookaheadDanger(state, botIndex);
 
-      // Unmortgage if cash allows
-      for (const tile of BOARD_TILES) {
-        if (
-          canUnmortgageTile(state, botIndex, tile.index) &&
-          bot.cash - getUnmortgageCost(tile) >= reserve
-        ) {
-          return { type: 'TOGGLE_MORTGAGE', tileIndex: tile.index };
+      // 1. Unmortgage monopolies & high-value tiles first
+      const unmortgageTile = pickBestUnmortgageTile(state, botIndex, reserve);
+      if (unmortgageTile) {
+        return { type: 'TOGGLE_MORTGAGE', tileIndex: unmortgageTile.index };
+      }
+
+      // 2. Build houses on highest-ROI monopolies (prioritizing the 3-house spike)
+      const buildReserve = hasUnderdevelopedMonopoly(state, botIndex)
+        ? Math.min(reserve, 100)
+        : reserve;
+      const buildTile = pickBestBuildTile(state, botIndex, buildReserve);
+      if (buildTile) {
+        return { type: 'BUILD_HOUSE', tileIndex: buildTile.index };
+      }
+
+      // 3. Proactively mortgage dead singletons to fund underdeveloped monopolies (< 3 houses)
+      if (hasUnderdevelopedMonopoly(state, botIndex)) {
+        const deadSingleton = pickBestMortgageTile(state, botIndex, true);
+        if (deadSingleton) {
+          return { type: 'TOGGLE_MORTGAGE', tileIndex: deadSingleton.index };
         }
       }
 
-      // Build Tutorien / Lehrstuhl evenly on monopolies
-      for (const tile of BOARD_TILES) {
-        if (
-          canBuildOnTile(state, botIndex, tile.index) &&
-          bot.cash - (tile.houseCost ?? 0) >= reserve
-        ) {
-          return { type: 'BUILD_HOUSE', tileIndex: tile.index };
+      // 4. Propose a strategic trade (at most once per turn, never repeating declined offers)
+      if (state.botTradeAttemptedTurn !== state.turnCount) {
+        const offer = findBestBotTradeOffer(state, botIndex);
+        if (offer) {
+          return { type: 'PROPOSE_TRADE', offer };
         }
       }
 

@@ -30,6 +30,7 @@ import {
   createAuction,
   executeTrade,
   finalizeAuctionIfDone,
+  getCanonicalTradeKey,
   validateTradeOffer,
 } from './trading';
 import type {
@@ -521,7 +522,14 @@ export function proposeTrade(state: GameState, offer: TradeOffer): GameState {
   if (state.phase !== 'TURN_ACTION' && state.phase !== 'WAIT_ROLL') return state;
   if (offer.fromIndex !== state.currentTurn) return state;
   if (!validateTradeOffer(state, offer)) return state;
-  return { ...state, pendingTrade: offer, preTradePhase: state.phase, phase: 'TRADE_REVIEW' };
+  const proposerIsBot = state.players[offer.fromIndex]?.seatType === 'bot';
+  return {
+    ...state,
+    pendingTrade: offer,
+    preTradePhase: state.phase,
+    phase: 'TRADE_REVIEW',
+    ...(proposerIsBot ? { botTradeAttemptedTurn: state.turnCount } : {}),
+  };
 }
 
 export function respondTrade(state: GameState, accept: boolean): GameState {
@@ -529,6 +537,9 @@ export function respondTrade(state: GameState, accept: boolean): GameState {
   if (!accept) {
     const fromName = state.players[state.pendingTrade.fromIndex]?.name ?? '';
     const toName = state.players[state.pendingTrade.toIndex]?.name ?? '';
+    const key = getCanonicalTradeKey(state.pendingTrade);
+    const prevDeclined = state.declinedTradeKeys ?? [];
+    const declinedTradeKeys = prevDeclined.includes(key) ? prevDeclined : [...prevDeclined, key];
     const log = appendLog(
       state.logs,
       state.nextLogId,
@@ -544,6 +555,7 @@ export function respondTrade(state: GameState, accept: boolean): GameState {
       pendingTrade: null,
       preTradePhase: undefined,
       phase: state.preTradePhase ?? 'TURN_ACTION',
+      declinedTradeKeys,
       logs: log.logs,
       nextLogId: log.nextLogId,
     };

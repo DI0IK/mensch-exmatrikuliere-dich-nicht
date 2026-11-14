@@ -156,6 +156,8 @@ export interface GameState {
   logs: LogEntry[];
   nextLogId: number;
   turnCount: number;
+  botTradeAttemptedTurn?: number;
+  declinedTradeKeys?: string[];
 }
 
 export type GameAction =

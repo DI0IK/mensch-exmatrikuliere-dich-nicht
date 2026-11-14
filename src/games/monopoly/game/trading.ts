@@ -1,6 +1,19 @@
 import { BOARD_TILES } from './boardData';
-import { appendLog, getMortgageValue, getUnmortgageCost, groupHasBuildings, ownsFullGroup } from './helpers';
-import type { AuctionState, GameState, TradeOffer } from './types';
+import {
+  computeLookaheadDanger,
+  evaluateTileStrategicValue,
+  getGroupPriorityScore,
+  isBlockingOpponentGroup,
+  isCompletingOwnGroup,
+} from './botStrategy';
+import { appendLog, getGroupTiles, getMortgageValue, getUnmortgageCost, groupHasBuildings } from './helpers';
+import type { AuctionState, ColorGroup, GameState, TradeOffer } from './types';
+
+export function getCanonicalTradeKey(offer: TradeOffer): string {
+  const offerProps = [...offer.offerProperties].sort((a, b) => a - b).join(',');
+  const reqProps = [...offer.requestProperties].sort((a, b) => a - b).join(',');
+  return `${offer.fromIndex}->${offer.toIndex}:${offerProps}|${offer.offerCash}|${offer.offerJailCards}:${reqProps}|${offer.requestCash}|${offer.requestJailCards}`;
+}
 
 export function isPropertyTradeable(state: GameState, ownerIndex: number, tileIndex: number): boolean {
   const tile = BOARD_TILES[tileIndex];
@@ -98,53 +111,198 @@ function estimatePropertyValueForPlayer(
   playerIndex: number,
   simulateAdded: Set<number>,
   simulateRemoved: Set<number>
-): number {
+): { value: number; completesMonopoly: boolean } {
   const tile = BOARD_TILES[tileIndex];
   const prop = state.properties[tileIndex];
-  if (!tile || !tile.price) return 0;
+  if (!tile || !tile.price) return { value: 0, completesMonopoly: false };
 
-  let value = prop?.mortgaged ? getMortgageValue(tile) : tile.price;
+  let value = (prop?.mortgaged ? getMortgageValue(tile) : tile.price) * getGroupPriorityScore(tile.group);
+  let completesMonopoly = false;
 
   if (tile.group) {
-    const groupTiles = BOARD_TILES.filter((t) => t.group === tile.group);
+    const groupTiles = getGroupTiles(tile.group);
     const ownedCount = groupTiles.filter((t) => {
       if (simulateRemoved.has(t.index)) return false;
       if (simulateAdded.has(t.index)) return true;
       return state.properties[t.index]?.ownerIndex === playerIndex;
     }).length;
     if (ownedCount === groupTiles.length) {
-      value *= 1.65;
+      value *= 2.2;
+      completesMonopoly = true;
     } else if (ownedCount === groupTiles.length - 1) {
-      value *= 1.2;
+      value *= 1.3;
     }
+  } else if (tile.type === 'transit') {
+    const ownedTransits = BOARD_TILES.filter((t) => {
+      if (t.type !== 'transit') return false;
+      if (simulateRemoved.has(t.index)) return false;
+      if (simulateAdded.has(t.index)) return true;
+      return state.properties[t.index]?.ownerIndex === playerIndex;
+    }).length;
+    value = tile.price * (1.05 + ownedTransits * 0.25);
   }
 
-  return value;
+  return { value, completesMonopoly };
 }
 
 export function evaluateTradeForBot(state: GameState, offer: TradeOffer): boolean {
   if (!validateTradeOffer(state, offer)) return false;
   const botIndex = offer.toIndex;
+  const fromIndex = offer.fromIndex;
   const bot = state.players[botIndex];
-  if (!bot || bot.cash - offer.requestCash + offer.offerCash < 80) {
+  const reserve = Math.min(140, computeLookaheadDanger(state, botIndex));
+  if (!bot || bot.cash - offer.requestCash + offer.offerCash < reserve) {
     return false;
   }
 
-  const added = new Set(offer.offerProperties);
-  const removed = new Set(offer.requestProperties);
+  const botAdded = new Set(offer.offerProperties);
+  const botRemoved = new Set(offer.requestProperties);
 
   let incomingValue = offer.offerCash + offer.offerJailCards * 45;
+  let botGainsMonopoly = false;
   for (const tileIdx of offer.offerProperties) {
-    incomingValue += estimatePropertyValueForPlayer(state, tileIdx, botIndex, added, removed);
+    const est = estimatePropertyValueForPlayer(state, tileIdx, botIndex, botAdded, botRemoved);
+    incomingValue += est.value;
+    if (est.completesMonopoly) botGainsMonopoly = true;
   }
 
   let outgoingValue = offer.requestCash + offer.requestJailCards * 45;
   for (const tileIdx of offer.requestProperties) {
-    outgoingValue += estimatePropertyValueForPlayer(state, tileIdx, botIndex, new Set(), new Set());
+    const est = estimatePropertyValueForPlayer(state, tileIdx, botIndex, new Set(), new Set());
+    outgoingValue += est.value;
   }
 
-  // Bot accepts if incoming value is at least 95% of outgoing value
-  return incomingValue >= outgoingValue * 0.95;
+  // Also check if the proposer completes a monopoly from this trade
+  const fromAdded = new Set(offer.requestProperties);
+  const fromRemoved = new Set(offer.offerProperties);
+  let proposerGainsMonopoly = false;
+  for (const tileIdx of offer.requestProperties) {
+    const est = estimatePropertyValueForPlayer(state, tileIdx, fromIndex, fromAdded, fromRemoved);
+    if (est.completesMonopoly) proposerGainsMonopoly = true;
+  }
+
+  // Never hand an opponent a monopoly unless we also get one or receive an overwhelming premium
+  if (proposerGainsMonopoly && !botGainsMonopoly) {
+    return incomingValue >= outgoingValue * 1.6 + 200;
+  }
+
+  // Mutually beneficial monopoly trades or clear value wins
+  if (botGainsMonopoly) {
+    return incomingValue >= outgoingValue * 0.95;
+  }
+
+  return incomingValue >= outgoingValue * 1.08;
+}
+
+/**
+ * Finds a strategic trade offer for `botIndex` to complete a color group.
+ */
+export function findBestBotTradeOffer(state: GameState, botIndex: number): TradeOffer | null {
+  const bot = state.players[botIndex];
+  if (!bot || bot.bankrupt) return null;
+
+  const declined = new Set(state.declinedTradeKeys ?? []);
+  const groups = new Set<ColorGroup>(
+    BOARD_TILES.map((t) => t.group).filter((g): g is ColorGroup => Boolean(g))
+  );
+
+  // Collect bot's surplus singletons (not part of a 2-of-3 or full group)
+  const surplusProps: number[] = [];
+  for (const tile of BOARD_TILES) {
+    if (!isPropertyTradeable(state, botIndex, tile.index)) continue;
+    if (tile.group) {
+      const groupTiles = getGroupTiles(tile.group);
+      const owned = groupTiles.filter((t) => state.properties[t.index]?.ownerIndex === botIndex).length;
+      if (owned >= groupTiles.length - 1) continue; // keep 2-of-3 or monopolies
+    } else if (tile.type === 'transit') {
+      const ownedTransits = BOARD_TILES.filter(
+        (t) => t.type === 'transit' && state.properties[t.index]?.ownerIndex === botIndex
+      ).length;
+      if (ownedTransits >= 2) continue;
+    }
+    surplusProps.push(tile.index);
+  }
+
+  let bestOffer: TradeOffer | null = null;
+  let bestScore = -Infinity;
+
+  for (const group of groups) {
+    const groupTiles = getGroupTiles(group);
+    const botOwned = groupTiles.filter((t) => state.properties[t.index]?.ownerIndex === botIndex);
+    if (botOwned.length !== groupTiles.length - 1) continue;
+
+    const missingTile = groupTiles.find((t) => state.properties[t.index]?.ownerIndex !== botIndex);
+    if (!missingTile) continue;
+
+    const targetIdx = state.properties[missingTile.index]?.ownerIndex;
+    if (targetIdx === null || targetIdx === undefined || targetIdx === botIndex) continue;
+    if (!isPropertyTradeable(state, targetIdx, missingTile.index)) continue;
+
+    const targetPrice = missingTile.price ?? 0;
+
+    // 1) Try offering a surplus property that helps the target + cash difference
+    for (const offerPropIdx of surplusProps) {
+      const offerTile = BOARD_TILES[offerPropIdx];
+      const offerBase = offerTile?.price ?? 0;
+      const targetNeedsIt = isCompletingOwnGroup(state, offerPropIdx, targetIdx);
+      const fairTargetVal = targetPrice * 1.25;
+      const offerVal = offerBase * (targetNeedsIt ? 1.5 : 1.0);
+      const cashDelta = Math.max(0, Math.round((fairTargetVal - offerVal) / 10) * 10);
+
+      if (bot.cash - cashDelta < 100) continue;
+
+      const candidate: TradeOffer = {
+        fromIndex: botIndex,
+        toIndex: targetIdx,
+        offerCash: cashDelta,
+        requestCash: 0,
+        offerProperties: [offerPropIdx],
+        requestProperties: [missingTile.index],
+        offerJailCards: 0,
+        requestJailCards: 0,
+      };
+
+      if (!validateTradeOffer(state, candidate)) continue;
+      if (declined.has(getCanonicalTradeKey(candidate))) continue;
+      if (state.players[targetIdx]?.seatType === 'bot' && !evaluateTradeForBot(state, candidate)) {
+        continue;
+      }
+
+      const score = getGroupPriorityScore(group) * 100 - cashDelta * 0.2;
+      if (score > bestScore) {
+        bestScore = score;
+        bestOffer = candidate;
+      }
+    }
+
+    // 2) Try pure cash offer if bot has plenty of cash above reserve
+    const cashOffer = Math.round((targetPrice * 1.65) / 10) * 10;
+    if (bot.cash - cashOffer >= 150) {
+      const candidate: TradeOffer = {
+        fromIndex: botIndex,
+        toIndex: targetIdx,
+        offerCash: cashOffer,
+        requestCash: 0,
+        offerProperties: [],
+        requestProperties: [missingTile.index],
+        offerJailCards: 0,
+        requestJailCards: 0,
+      };
+      if (
+        validateTradeOffer(state, candidate) &&
+        !declined.has(getCanonicalTradeKey(candidate)) &&
+        (state.players[targetIdx]?.seatType !== 'bot' || evaluateTradeForBot(state, candidate))
+      ) {
+        const score = getGroupPriorityScore(group) * 80 - cashOffer * 0.2;
+        if (score > bestScore) {
+          bestScore = score;
+          bestOffer = candidate;
+        }
+      }
+    }
+  }
+
+  return bestOffer;
 }
 
 export function createAuction(state: GameState, tileIndex: number): AuctionState {
@@ -258,22 +416,16 @@ export function computeBotAuctionBid(
   const tile = BOARD_TILES[auction.tileIndex];
   if (!bot || !tile || !tile.price) return null;
 
-  let maxWilling = Math.floor(tile.price * 1.1);
-  if (tile.group) {
-    const groupTiles = BOARD_TILES.filter((t) => t.group === tile.group);
-    const ownedInGroup = groupTiles.filter(
-      (t) => state.properties[t.index]?.ownerIndex === botIndex
-    ).length;
-    if (ownedInGroup === groupTiles.length - 1) {
-      maxWilling = Math.floor(tile.price * 1.45);
-    } else if (ownsFullGroup(state.properties, botIndex, tile.group)) {
-      maxWilling = tile.price;
-    }
-  }
+  const strategicValue = evaluateTileStrategicValue(state, auction.tileIndex, botIndex);
+  const completesOrBlocks =
+    isCompletingOwnGroup(state, auction.tileIndex, botIndex) ||
+    isBlockingOpponentGroup(state, auction.tileIndex, botIndex);
 
-  const reserve = 120;
+  const reserve = completesOrBlocks
+    ? 40
+    : Math.min(160, computeLookaheadDanger(state, botIndex));
   const maxAffordable = Math.max(0, bot.cash - reserve);
-  const cap = Math.min(maxWilling, maxAffordable);
+  const cap = Math.min(strategicValue, maxAffordable);
   const nextBid = auction.currentBid === 0 ? Math.min(20, cap) : auction.currentBid + 10;
 
   if (nextBid <= cap && nextBid > auction.currentBid) {
