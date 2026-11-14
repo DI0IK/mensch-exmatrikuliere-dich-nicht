@@ -461,3 +461,45 @@ select {
 .uno-banner-pop {
   animation: unoBannerPop 0.25s ease-out;
 }
+
+/* Campus Werewolf 3D Role Card & Atmosphere */
+.werewolf-flip-card {
+  perspective: 1100px;
+}
+
+.werewolf-flip-inner {
+  position: relative;
+  width: 100%;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+
+.werewolf-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.werewolf-flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.werewolf-flip-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+@keyframes werewolfDawnIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.werewolf-dawn-in {
+  animation: werewolfDawnIn 0.3s ease-out;
+}

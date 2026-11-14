@@ -401,11 +401,25 @@ export abstract class BaseGameEngine<
     }
   }
 
+  protected sanitizeStateForSeat(state: TState, _seatIndex: number): TState {
+    return state;
+  }
+
+  public getSanitizedStateForSeat(seatIndex: number): TState | null {
+    if (!this.gameState) return null;
+    return this.sanitizeStateForSeat(this.gameState, seatIndex);
+  }
+
   protected broadcastState(next: TState): void {
     const prev = this.gameState;
     this.onStateTransition(prev, next);
     this.gameState = next;
-    this.hostRoom?.broadcast({ kind: 'STATE_SYNC', state: next });
+    for (const seatIndex of this.connectedSeats) {
+      this.hostRoom?.sendToSeat(seatIndex, {
+        kind: 'STATE_SYNC',
+        state: this.sanitizeStateForSeat(next, seatIndex),
+      });
+    }
     this.emit();
   }
 
@@ -505,7 +519,10 @@ export abstract class BaseGameEngine<
             settings: this.settings,
           });
           if (this.gameState) {
-            room.sendToSeat(seatIndex, { kind: 'STATE_SYNC', state: this.gameState });
+            room.sendToSeat(seatIndex, {
+              kind: 'STATE_SYNC',
+              state: this.sanitizeStateForSeat(this.gameState, seatIndex),
+            });
           }
         } else {
           this.connectedSeats = this.connectedSeats.filter((s) => s !== seatIndex);
