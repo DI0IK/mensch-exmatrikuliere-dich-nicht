@@ -162,4 +162,31 @@ describe('Smart Monopoly Bot AI', () => {
     const action = decideBotAction(state, 1);
     expect(action).toEqual({ type: 'TOGGLE_MORTGAGE', tileIndex: brownTiles[0].index });
   });
+
+  it('never enters a mortgage/unmortgage loop in TURN_ACTION', () => {
+    let state = makeBaseState();
+    const orangeTiles = getGroupTiles('orange');
+    const brownTiles = getGroupTiles('brown');
+
+    for (const t of orangeTiles) {
+      state.properties[t.index] = { ownerIndex: 1, houses: 0, mortgaged: false };
+    }
+    state.properties[brownTiles[0].index] = { ownerIndex: 1, houses: 0, mortgaged: true };
+
+    state.currentTurn = 1;
+    state.phase = 'TURN_ACTION';
+    state.players[1].cash = 175;
+
+    const actions: string[] = [];
+    for (let step = 0; step < 10; step++) {
+      const action = decideBotAction(state, 1);
+      expect(action).not.toBeNull();
+      actions.push(action!.type);
+      if (action!.type === 'END_TURN') break;
+      state = applyGameAction(state, action!);
+    }
+
+    expect(actions[actions.length - 1]).toBe('END_TURN');
+    expect(actions.filter((a) => a === 'TOGGLE_MORTGAGE').length).toBeLessThanOrEqual(1);
+  });
 });

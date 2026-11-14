@@ -93,26 +93,26 @@ export function decideBotAction(state: GameState, botIndex: number): GameAction 
 
     case 'TURN_ACTION': {
       const reserve = computeLookaheadDanger(state, botIndex);
+      const underdeveloped = hasUnderdevelopedMonopoly(state, botIndex);
 
-      // 1. Unmortgage monopolies & high-value tiles first
-      const unmortgageTile = pickBestUnmortgageTile(state, botIndex, reserve);
+      // 1. Unmortgage monopolies first; only unmortgage non-monopolies when not saving for houses
+      const unmortgageTile = pickBestUnmortgageTile(state, botIndex, reserve, underdeveloped);
       if (unmortgageTile) {
         return { type: 'TOGGLE_MORTGAGE', tileIndex: unmortgageTile.index };
       }
 
       // 2. Build houses on highest-ROI monopolies (prioritizing the 3-house spike)
-      const buildReserve = hasUnderdevelopedMonopoly(state, botIndex)
-        ? Math.min(reserve, 100)
-        : reserve;
+      const buildReserve = underdeveloped ? Math.min(reserve, 100) : reserve;
       const buildTile = pickBestBuildTile(state, botIndex, buildReserve);
       if (buildTile) {
         return { type: 'BUILD_HOUSE', tileIndex: buildTile.index };
       }
 
-      // 3. Proactively mortgage dead singletons to fund underdeveloped monopolies (< 3 houses)
-      if (hasUnderdevelopedMonopoly(state, botIndex)) {
+      // 3. Proactively mortgage dead singletons only if it helps fund a buildable monopoly (< 3 houses)
+      if (underdeveloped) {
+        const affordableTarget = pickBestBuildTile(state, botIndex, 0);
         const deadSingleton = pickBestMortgageTile(state, botIndex, true);
-        if (deadSingleton) {
+        if (deadSingleton && (affordableTarget || bot.cash < buildReserve + 150)) {
           return { type: 'TOGGLE_MORTGAGE', tileIndex: deadSingleton.index };
         }
       }

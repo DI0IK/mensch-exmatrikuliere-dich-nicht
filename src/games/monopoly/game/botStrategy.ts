@@ -261,7 +261,8 @@ export function hasUnderdevelopedMonopoly(state: GameState, botIndex: number): b
 export function pickBestUnmortgageTile(
   state: GameState,
   botIndex: number,
-  reserve: number
+  reserve: number,
+  onlyMonopolies = false
 ): TileDef | null {
   const bot = state.players[botIndex];
   if (!bot) return null;
@@ -271,11 +272,14 @@ export function pickBestUnmortgageTile(
 
   for (const tile of BOARD_TILES) {
     if (!canUnmortgageTile(state, botIndex, tile.index)) continue;
+    const isMonopolyTile = Boolean(tile.group && ownsFullGroup(state.properties, botIndex, tile.group));
+    if (onlyMonopolies && !isMonopolyTile) continue;
+
     const cost = getUnmortgageCost(tile);
     if (bot.cash - cost < reserve) continue;
 
     let score = getGroupPriorityScore(tile.group) * 10;
-    if (tile.group && ownsFullGroup(state.properties, botIndex, tile.group)) {
+    if (isMonopolyTile) {
       score += 100;
     } else if (tile.type === 'transit') {
       score += 35;
