@@ -1,6 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import { getIceServers } from './iceConfig';
-import type { NetMessage } from '../../games/medn/net/webrtc';
+import type { BaseNetMessage } from '../types/game';
 
 export type IceTransportKind = 'local' | 'stun' | 'turn';
 
@@ -58,14 +58,17 @@ export function generateLobbyCode(length = 6): string {
   return code;
 }
 
-function peerIdFromCode(code: string): string {
-  return `medn-${code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
+function peerIdFromCode(code: string, gameId = 'medn'): string {
+  const cleanGame = gameId.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'medn';
+  const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return `${cleanGame}-${cleanCode}`;
 }
 
-export class LobbyHostRoom<TMsg = NetMessage> {
+export class LobbyHostRoom<TMsg = BaseNetMessage> {
   private peer: Peer | null = null;
   private seatConns = new Map<number, DataConnection>();
   public readonly lobbyCode: string;
+  private readonly gameId: string;
 
   private getOpenRemoteSeats: () => number[];
   private onMessage: (seatIndex: number, msg: TMsg) => void;
@@ -74,6 +77,7 @@ export class LobbyHostRoom<TMsg = NetMessage> {
   private onRoomError: (err: string) => void;
 
   constructor(opts: {
+    gameId?: string;
     lobbyCode?: string;
     getOpenRemoteSeats: () => number[];
     onMessage: (seatIndex: number, msg: TMsg) => void;
@@ -81,6 +85,7 @@ export class LobbyHostRoom<TMsg = NetMessage> {
     onRoomReady: (code: string) => void;
     onRoomError: (err: string) => void;
   }) {
+    this.gameId = opts.gameId ?? 'medn';
     this.lobbyCode = opts.lobbyCode ?? generateLobbyCode();
     this.getOpenRemoteSeats = opts.getOpenRemoteSeats;
     this.onMessage = opts.onMessage;
@@ -91,7 +96,7 @@ export class LobbyHostRoom<TMsg = NetMessage> {
 
   public start(): void {
     this.closeAll();
-    const peer = new Peer(peerIdFromCode(this.lobbyCode), {
+    const peer = new Peer(peerIdFromCode(this.lobbyCode, this.gameId), {
       config: { iceServers: getIceServers() },
     });
     this.peer = peer;
@@ -108,7 +113,7 @@ export class LobbyHostRoom<TMsg = NetMessage> {
       const openSeats = this.getOpenRemoteSeats().filter((s) => !this.seatConns.has(s));
       if (openSeats.length === 0) {
         conn.on('open', () => {
-          conn.send({ kind: 'ROOM_ERROR', message: 'Lobby is full' } satisfies NetMessage);
+          conn.send({ kind: 'ROOM_ERROR', message: 'Lobby is full' } satisfies BaseNetMessage);
           window.setTimeout(() => conn.close(), 200);
         });
         return;
@@ -118,7 +123,7 @@ export class LobbyHostRoom<TMsg = NetMessage> {
       this.seatConns.set(assignedSeat, conn);
 
       conn.on('open', () => {
-        conn.send({ kind: 'WELCOME', assignedSeat, state: null } satisfies NetMessage);
+        conn.send({ kind: 'WELCOME', assignedSeat, state: null } satisfies BaseNetMessage);
         this.onStatusChange(assignedSeat, true);
       });
 
@@ -191,18 +196,21 @@ export class LobbyHostRoom<TMsg = NetMessage> {
   }
 }
 
-export class LobbyGuestRoom<TMsg = NetMessage> {
+export class LobbyGuestRoom<TMsg = BaseNetMessage> {
   private peer: Peer | null = null;
   private conn: DataConnection | null = null;
+  private readonly gameId: string;
   private onMessage: (msg: TMsg) => void;
   private onStatusChange: (connected: boolean) => void;
   private onError: (err: string) => void;
 
   constructor(opts: {
+    gameId?: string;
     onMessage: (msg: TMsg) => void;
     onStatusChange: (connected: boolean) => void;
     onError: (err: string) => void;
   }) {
+    this.gameId = opts.gameId ?? 'medn';
     this.onMessage = opts.onMessage;
     this.onStatusChange = opts.onStatusChange;
     this.onError = opts.onError;
@@ -210,7 +218,7 @@ export class LobbyGuestRoom<TMsg = NetMessage> {
 
   public join(lobbyCode: string): void {
     this.close();
-    const targetId = peerIdFromCode(lobbyCode);
+    const targetId = peerIdFromCode(lobbyCode, this.gameId);
     if (targetId.length <= 5) {
       this.onError('Invalid lobby code');
       return;

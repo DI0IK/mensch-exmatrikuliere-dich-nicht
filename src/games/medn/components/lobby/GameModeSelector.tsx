@@ -1,6 +1,7 @@
 import React from 'react';
 import { GAME_MODE_OPTIONS, normalizeGameSettings } from '../../game/modes';
 import type { GameSettings, Language } from '../../game/types';
+import { Button, StampBadge } from '../../../../shared/ui';
 
 interface GameModeSelectorProps {
   language: Language;
@@ -64,23 +65,22 @@ export const GameModeSelector: React.FC<GameModeSelectorProps> = ({
             </div>
 
             {isGuest ? (
-              <span
-                className={`stamp-badge ${active ? mode.guestBadgeClass : ''}`}
+              <StampBadge
+                variant={active ? (mode.guestBadgeClass === 'stamp-exmatrikuliert' ? 'exmatrikuliert' : 'immatrikuliert') : 'neutral'}
                 style={{ fontSize: '0.74rem' }}
               >
                 {active ? mode.activeText[language] : mode.inactiveText[language]}
-              </span>
+              </StampBadge>
             ) : (
-              <button
-                type="button"
+              <Button
                 role="switch"
                 aria-checked={active}
                 onClick={() => onChangeSettings(mode.toggle(settings))}
-                className={`tactile-btn ${active ? 'primary' : ''}`}
+                variant={active ? 'primary' : 'default'}
                 style={{ padding: '7px 14px', fontSize: '0.84rem', minWidth: '86px' }}
               >
                 {active ? mode.activeText[language] : mode.inactiveText[language]}
-              </button>
+              </Button>
             )}
           </div>
         );

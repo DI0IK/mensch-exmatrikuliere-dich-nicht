@@ -1,24 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildJoinUrl, type GameId } from '../net/joinLink';
-import { SUPERPOWER_LIST, SUPERPOWER_META } from '../../games/medn/game/superpowers';
-import type { GameSettings, Language, PlayerConfig, SuperpowerType } from '../../games/medn/game/types';
-import { COLOR_LABELS, TRANSLATIONS } from '../../games/medn/i18n/translations';
-import { GameModeSelector } from '../../games/medn/components/lobby/GameModeSelector';
 import {
   ALL_DEFAULT_NAMES,
   COLOR_HEX,
+  COLOR_LABELS,
   DEFAULT_EMOJI,
   DEFAULT_NAMES,
   EMOJI_PRESETS,
   MAJOR_SUGGESTIONS,
-} from '../../games/medn/components/lobby/types';
+  type BasePlayerConfig,
+  type Language,
+} from '../types/game';
+import { LOBBY_TRANSLATIONS } from '../i18n/lobbyTranslations';
+import { Button, Card, StampBadge } from '../ui';
 
-interface LobbyProps {
+export interface SeatExtraContext<TPlayer extends BasePlayerConfig = BasePlayerConfig> {
+  player: TPlayer;
+  index: number;
+  isGuest: boolean;
+  isMyGuestSeat: boolean;
+  canEditProfile: boolean;
+  onUpdate: (patch: Partial<TPlayer>) => void;
+}
+
+interface LobbyProps<TPlayer extends BasePlayerConfig = BasePlayerConfig> {
   language: Language;
-  players: PlayerConfig[];
-  settings?: GameSettings;
-  lobbySettings?: GameSettings | null;
-  lobbyRoster: PlayerConfig[] | null;
+  players: TPlayer[];
+  lobbyRoster: TPlayer[] | null;
   connectedSeats: number[];
   hostLobbyCode: string | null;
   hostLobbyError: string | null;
@@ -28,34 +36,31 @@ interface LobbyProps {
   guestName: string;
   guestMajor: string;
   guestEmoji: string;
-  guestSuperpower?: SuperpowerType | 'random';
   guestConnected: boolean;
   guestConnecting: boolean;
   guestError: string | null;
-  onChangePlayers: (players: PlayerConfig[]) => void;
-  onChangeSettings?: (settings: GameSettings) => void;
+  onChangePlayers: (players: TPlayer[]) => void;
   onChangeGuestName: (name: string) => void;
   onChangeGuestMajor: (major: string) => void;
   onChangeGuestEmoji: (emoji: string) => void;
-  onChangeGuestSuperpower?: (superpower: SuperpowerType | 'random') => void;
   onToggleLanguage: () => void;
   onCloseRemoteSeat: (seatIndex: number) => void;
   onStartGame: () => void;
   onGuestJoinRoom: (roomCode: string) => void;
   onGuestLeave: () => void;
+  onBackToGames?: () => void;
   titleOverride?: string;
   subtitleOverride?: string;
   badgeOverride?: string;
   startLabelOverride?: string;
   customModeSelector?: React.ReactNode;
+  renderSeatExtra?: (ctx: SeatExtraContext<TPlayer>) => React.ReactNode;
   gameId?: GameId;
 }
 
-export const Lobby: React.FC<LobbyProps> = ({
+export function Lobby<TPlayer extends BasePlayerConfig = BasePlayerConfig>({
   language,
   players,
-  settings,
-  lobbySettings,
   lobbyRoster,
   connectedSeats,
   hostLobbyCode,
@@ -66,29 +71,28 @@ export const Lobby: React.FC<LobbyProps> = ({
   guestName,
   guestMajor,
   guestEmoji,
-  guestSuperpower,
   guestConnected,
   guestConnecting,
   guestError,
   onChangePlayers,
-  onChangeSettings,
   onChangeGuestName,
   onChangeGuestMajor,
   onChangeGuestEmoji,
-  onChangeGuestSuperpower,
   onToggleLanguage,
   onCloseRemoteSeat,
   onStartGame,
   onGuestJoinRoom,
   onGuestLeave,
+  onBackToGames,
   titleOverride,
   subtitleOverride,
   badgeOverride,
   startLabelOverride,
   customModeSelector,
+  renderSeatExtra,
   gameId = 'medn',
-}) => {
-  const t = TRANSLATIONS[language];
+}: LobbyProps<TPlayer>) {
+  const t = LOBBY_TRANSLATIONS[language];
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [openEmojiSeat, setOpenEmojiSeat] = useState<number | null>(null);
@@ -115,7 +119,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const canStart = !isGuest && activeCount >= 2;
   const connectedSet = new Set(connectedSeats);
 
-  const updateSeat = (idx: number, patch: Partial<PlayerConfig>) => {
+  const updateSeat = (idx: number, patch: Partial<BasePlayerConfig> | Partial<TPlayer>) => {
     if (isGuest) return;
     const prevSeat = players[idx];
     const next = players.map((p, i) => {
@@ -145,8 +149,7 @@ export const Lobby: React.FC<LobbyProps> = ({
         paddingBottom: '32px',
       }}
     >
-      <div
-        className="paper-card"
+      <Card
         style={{
           width: '100%',
           maxWidth: '740px',
@@ -169,9 +172,9 @@ export const Lobby: React.FC<LobbyProps> = ({
           }}
         >
           <div>
-            <div className="stamp-badge stamp-exmatrikuliert" style={{ fontSize: '0.72rem', marginBottom: '8px' }}>
+            <StampBadge variant="exmatrikuliert" style={{ fontSize: '0.72rem', marginBottom: '8px' }}>
               {badgeOverride ?? `PO 2026 · ${language === 'de' ? 'PRÜFUNGSAMT' : 'EXAM OFFICE'}`}
-            </div>
+            </StampBadge>
             <h1
               style={{
                 margin: 0,
@@ -188,13 +191,24 @@ export const Lobby: React.FC<LobbyProps> = ({
             </p>
           </div>
 
-          <button
-            className="tactile-btn"
-            onClick={onToggleLanguage}
-            style={{ padding: '6px 12px', fontSize: '0.82rem' }}
-          >
-            {language === 'de' ? 'DE / EN' : 'EN / DE'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onBackToGames && (
+              <Button
+                size="sm"
+                onClick={onBackToGames}
+                style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+              >
+                ← {t.backToGames}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={onToggleLanguage}
+              style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+            >
+              {language === 'de' ? 'DE / EN' : 'EN / DE'}
+            </Button>
+          </div>
         </div>
 
         {/* Unified Campus Room Pass (Host Code + Join by Code, or Connected Guest Bar) */}
@@ -223,13 +237,13 @@ export const Lobby: React.FC<LobbyProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <span className="stamp-badge stamp-immatrikuliert" style={{ fontSize: '0.74rem' }}>
+                <StampBadge variant="immatrikuliert" style={{ fontSize: '0.74rem' }}>
                   {t.webrtcConnected}
-                </span>
+                </StampBadge>
                 <strong style={{ fontSize: '0.94rem' }}>{t.webrtcWaitingRoom}</strong>
               </div>
-              <button
-                className="tactile-btn"
+              <Button
+                size="sm"
                 style={{ padding: '7px 14px', fontSize: '0.84rem' }}
                 onClick={() => {
                   setRoomCodeInput('');
@@ -237,7 +251,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                 }}
               >
                 {t.webrtcLeaveRoom}
-              </button>
+              </Button>
             </div>
           ) : (
             <div
@@ -302,9 +316,8 @@ export const Lobby: React.FC<LobbyProps> = ({
 
                     {hostLobbyCode && (
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          className="tactile-btn"
+                        <Button
+                          size="sm"
                           aria-label={copiedKey === 'lobby-code' ? t.copied : t.lobbyCodeCopy}
                           title={copiedKey === 'lobby-code' ? t.copied : t.lobbyCodeCopy}
                           style={{
@@ -326,10 +339,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                             </svg>
                           )}
-                        </button>
-                        <button
-                          type="button"
-                          className="tactile-btn"
+                        </Button>
+                        <Button
+                          size="sm"
                           aria-label={copiedKey === 'lobby-url' ? t.copied : t.lobbyCodeLinkCopy}
                           title={copiedKey === 'lobby-url' ? t.copied : t.lobbyCodeLinkCopy}
                           style={{
@@ -353,7 +365,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                             </svg>
                           )}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -401,9 +413,8 @@ export const Lobby: React.FC<LobbyProps> = ({
                       letterSpacing: '0.12em',
                     }}
                   />
-                  <button
-                    type="button"
-                    className="tactile-btn primary"
+                  <Button
+                    variant="primary"
                     aria-label={guestConnecting ? t.lobbyCodeConnecting : t.lobbyCodeJoinBtn}
                     title={guestConnecting ? t.lobbyCodeConnecting : t.lobbyCodeJoinBtn}
                     style={{
@@ -432,7 +443,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         <line x1="15" y1="12" x2="3" y2="12" />
                       </svg>
                     )}
-                  </button>
+                  </Button>
                 </div>
                 {hostLobbyCode &&
                   roomCodeInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') === hostLobbyCode && (
@@ -588,7 +599,6 @@ export const Lobby: React.FC<LobbyProps> = ({
                         onClick={() =>
                           updateSeat(idx, {
                             seatType: player.seatType === 'human-local' ? 'bot' : 'human-local',
-                            ...(player.seatType === 'human-local' ? { superpower: undefined } : {}),
                           })
                         }
                         style={{
@@ -771,67 +781,17 @@ export const Lobby: React.FC<LobbyProps> = ({
                   </div>
                 )}
 
-                {/* Ultra Hardcore Superpower Selector */}
-                {!customModeSelector &&
-                  (isGuest ? lobbySettings?.ultraHardcore : settings?.ultraHardcore) &&
-                  player.active && (
-                  <div
-                    style={{
-                      paddingLeft: isGuest ? 0 : '28px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-muted)' }}>
-                      ⚡ {language === 'de' ? 'Superkraft:' : 'Superpower:'}
-                    </span>
-                    {canEditProfile ? (
-                      <select
-                        value={isMyGuestSeat ? (guestSuperpower ?? 'random') : (player.superpower ?? 'random')}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          if (isMyGuestSeat) {
-                            onChangeGuestSuperpower?.(raw as SuperpowerType | 'random');
-                          } else {
-                            updateSeat(idx, {
-                              superpower: raw === 'random' ? undefined : (raw as SuperpowerType),
-                            });
-                          }
-                        }}
-                        style={{
-                          padding: '5px 8px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbbba0',
-                          background: '#fff',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                        }}
-                      >
-                        <option value="random">
-                          ❓ {language === 'de' ? 'Zufällig' : 'Random'}
-                        </option>
-                        {SUPERPOWER_LIST.map((sp) => (
-                          <option key={sp.id} value={sp.id}>
-                            {sp.icon} {sp.label[language]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>
-                        {!player.superpower ? (
-                          <>❓ {language === 'de' ? 'Zufällig' : 'Random'}</>
-                        ) : (
-                          <>
-                            {SUPERPOWER_META[player.superpower].icon}{' '}
-                            {SUPERPOWER_META[player.superpower].label[language]}
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {/* Game-specific per-seat extra (e.g. MEDN Superpower selector) */}
+                {renderSeatExtra &&
+                  player.active &&
+                  renderSeatExtra({
+                    player,
+                    index: idx,
+                    isGuest,
+                    isMyGuestSeat,
+                    canEditProfile,
+                    onUpdate: (patch) => updateSeat(idx, patch),
+                  })}
 
                 {/* Connected P2P Guest indicator + Kick/Reset button for Host */}
                 {!isGuest && isRemoteConnected && (
@@ -845,16 +805,16 @@ export const Lobby: React.FC<LobbyProps> = ({
                       gap: '8px',
                     }}
                   >
-                    <span className="stamp-badge stamp-immatrikuliert" style={{ fontSize: '0.72rem' }}>
+                    <StampBadge variant="immatrikuliert" style={{ fontSize: '0.72rem' }}>
                       {t.webrtcConnected}
-                    </span>
-                    <button
-                      className="tactile-btn"
+                    </StampBadge>
+                    <Button
+                      size="sm"
                       style={{ padding: '4px 10px', fontSize: '0.76rem' }}
                       onClick={() => onCloseRemoteSeat(idx)}
                     >
                       {t.webrtcResetSeat}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -863,18 +823,7 @@ export const Lobby: React.FC<LobbyProps> = ({
         </div>
 
         {/* Game Mode & Variant Flags */}
-        {customModeSelector ?? (
-          settings &&
-          onChangeSettings && (
-            <GameModeSelector
-              language={language}
-              isGuest={isGuest}
-              settings={settings}
-              lobbySettings={lobbySettings ?? null}
-              onChangeSettings={onChangeSettings}
-            />
-          )
-        )}
+        {customModeSelector}
 
         {/* Start Game (Host) or Waiting Status (Guest) */}
         {isGuest ? (
@@ -892,16 +841,16 @@ export const Lobby: React.FC<LobbyProps> = ({
             {t.webrtcWaitingRoom}
           </div>
         ) : (
-          <button
-            className="tactile-btn primary"
+          <Button
+            variant="primary"
             disabled={!canStart}
             onClick={onStartGame}
             style={{ width: '100%', padding: '13px', fontSize: '1.05rem' }}
           >
             {startLabelOverride ?? t.startGame}
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
     </div>
   );
-};
+}

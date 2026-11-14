@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GameState, Language, PlayerColor } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
+import { Button, Modal, StampBadge } from '../../../shared/ui';
 
 interface WinnerModalProps {
   state: GameState;
@@ -27,59 +28,43 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
   const winner = state.players[state.winnerIndex];
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(35, 29, 23, 0.58)',
-        backdropFilter: 'blur(3px)',
-        display: 'flex',
+    <Modal
+      open
+      maxWidth="440px"
+      closeOnBackdrop={false}
+      cardStyle={{
+        padding: '26px',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        zIndex: 60,
+        gap: '14px',
+        textAlign: 'center',
       }}
     >
-      <div
-        className="paper-card"
+      <StampBadge variant="immatrikuliert" animated style={{ fontSize: '1rem' }}>
+        1,0 · SUMMA CUM LAUDE
+      </StampBadge>
+      <h2
         style={{
-          width: '100%',
-          maxWidth: '440px',
-          padding: '26px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '14px',
-          textAlign: 'center',
+          margin: 0,
+          fontFamily: 'var(--font-display)',
+          fontSize: '1.75rem',
+          fontWeight: 800,
         }}
       >
-        <div className="stamp-badge stamp-immatrikuliert animate-stamp" style={{ fontSize: '1rem' }}>
-          1,0 · SUMMA CUM LAUDE
-        </div>
-        <h2
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontSize: '1.75rem',
-            fontWeight: 800,
-          }}
-        >
-          {t.winnerTitle}
-        </h2>
-        <p style={{ margin: 0, fontSize: '1rem', lineHeight: 1.45 }}>
-          <strong style={{ color: COLOR_HEX[winner.color] }}>{winner.name}</strong>{' '}
-          {t.winnerSubtitle}
-        </p>
+        {t.winnerTitle}
+      </h2>
+      <p style={{ margin: 0, fontSize: '1rem', lineHeight: 1.45 }}>
+        <strong style={{ color: COLOR_HEX[winner.color] }}>{winner.name}</strong>{' '}
+        {t.winnerSubtitle}
+      </p>
 
-        <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '8px' }}>
-          <button className="tactile-btn primary" onClick={onPlayAgain} style={{ flex: 1 }}>
-            {t.playAgain}
-          </button>
-          <button className="tactile-btn" onClick={onBackToLobby} style={{ flex: 1 }}>
-            {t.backToLobby}
-          </button>
-        </div>
+      <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '8px' }}>
+        <Button variant="primary" onClick={onPlayAgain} style={{ flex: 1 }}>
+          {t.playAgain}
+        </Button>
+        <Button onClick={onBackToLobby} style={{ flex: 1 }}>
+          {t.backToLobby}
+        </Button>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { canUseSuperpower, getPlayerSuperpower, SUPERPOWER_META } from '../game/superpowers';
 import type { GameAction, GameLogEntry, GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
 import { ConnectionInfoModal } from '../../../shared/components/ConnectionInfoModal';
 import { GameToolbar } from '../../../shared/components/GameToolbar';
 import type { IceTransportKind } from '../../../shared/net/lobbyRoom';
+import { Button } from '../../../shared/ui';
 import { DieFace } from './DieFace';
 
 interface ActionDockProps {
@@ -17,6 +18,7 @@ interface ActionDockProps {
   hostLobbyCode: string | null;
   connectedSeats: number[];
   disconnectedSeats: number[];
+  seatTransports: Record<number, IceTransportKind>;
   onRoll: () => void;
   onDispatchAction: (action: GameAction) => void;
   isInstantFinishTargeting: boolean;
@@ -29,7 +31,6 @@ interface ActionDockProps {
   onToggleMute: () => void;
   onBackToLobby: () => void;
   onTakeOverAsBot: (seatIndex: number) => void;
-  getConnectionTransports?: () => Promise<Record<number, IceTransportKind>>;
 }
 
 function formatLogEntry(entry: GameLogEntry, state: GameState, language: Language): string {
@@ -107,6 +108,7 @@ export const ActionDock: React.FC<ActionDockProps> = ({
   hostLobbyCode,
   connectedSeats,
   disconnectedSeats,
+  seatTransports,
   onRoll,
   onDispatchAction,
   isInstantFinishTargeting,
@@ -119,25 +121,10 @@ export const ActionDock: React.FC<ActionDockProps> = ({
   onToggleMute,
   onBackToLobby,
   onTakeOverAsBot,
-  getConnectionTransports,
 }) => {
   const t = TRANSLATIONS[language];
   const [showConnInfo, setShowConnInfo] = useState(false);
-  const [seatTransports, setSeatTransports] = useState<Record<number, IceTransportKind>>({});
   const currentPlayer = state.players[state.currentTurn];
-
-  useEffect(() => {
-    if (!showConnInfo || !getConnectionTransports) return;
-    let cancelled = false;
-    getConnectionTransports().then((res) => {
-      if (!cancelled) {
-        setSeatTransports(res);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [showConnInfo, getConnectionTransports]);
   const showAttempts =
     state.phase === 'WAIT_ROLL' &&
     state.rollAttemptsInBase > 0 &&
@@ -435,13 +422,13 @@ export const ActionDock: React.FC<ActionDockProps> = ({
                 <span style={{ color: 'var(--stamp-red)', fontWeight: 700 }}>
                   {t.webrtcDisconnectedBanner} {p.name}
                 </span>
-                <button
-                  className="tactile-btn"
+                <Button
+                  size="sm"
                   style={{ padding: '4px 10px', fontSize: '0.78rem' }}
                   onClick={() => onTakeOverAsBot(seatIdx)}
                 >
                   {t.webrtcTakeOverBot}
-                </button>
+                </Button>
               </div>
             );
           })}

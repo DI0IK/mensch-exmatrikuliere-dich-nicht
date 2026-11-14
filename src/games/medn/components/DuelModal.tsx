@@ -2,6 +2,7 @@ import React from 'react';
 import { canUseSuperpower } from '../game/superpowers';
 import type { GameState, Language, PlayerColor } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
+import { Button, Modal } from '../../../shared/ui';
 import { DieFace } from './DieFace';
 
 interface DuelModalProps {
@@ -76,32 +77,18 @@ export const DuelModal: React.FC<DuelModalProps> = ({
     localSeatIndices.includes(duel.defenderPlayerIndex);
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(35, 29, 23, 0.56)',
-        backdropFilter: 'blur(3px)',
-        display: 'flex',
+    <Modal
+      open
+      maxWidth="460px"
+      zIndex={50}
+      closeOnBackdrop={false}
+      cardStyle={{
+        padding: '22px',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        zIndex: 50,
+        gap: '16px',
+        textAlign: 'center',
       }}
     >
-      <div
-        className="paper-card"
-        style={{
-          width: '100%',
-          maxWidth: '460px',
-          padding: '22px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px',
-          textAlign: 'center',
-        }}
-      >
         <h2
           style={{
             margin: 0,
@@ -287,10 +274,8 @@ export const DuelModal: React.FC<DuelModalProps> = ({
                 canUseSuperpower(state, seatIdx, 'autoWinDuel')
             )
             .map((seatIdx) => (
-              <button
+              <Button
                 key={`autowin-${seatIdx}`}
-                type="button"
-                className="tactile-btn"
                 style={{
                   background: '#fff3cd',
                   borderColor: '#c99a2e',
@@ -303,15 +288,14 @@ export const DuelModal: React.FC<DuelModalProps> = ({
                 {language === 'de'
                   ? `Superkraft (${state.players[seatIdx]?.name}): Duell sofort gewinnen!`
                   : `Superpower (${state.players[seatIdx]?.name}): Win duel immediately!`}
-              </button>
+              </Button>
             ))}
 
         {state.phase === 'DUEL_RESULT' && (
-          <button className="tactile-btn primary" onClick={onAcknowledge} disabled={!canAcknowledge}>
+          <Button variant="primary" onClick={onAcknowledge} disabled={!canAcknowledge}>
             {t.duelContinueBtn}
-          </button>
+          </Button>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

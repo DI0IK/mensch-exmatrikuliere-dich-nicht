@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { GameComponentProps } from '../../shared/collection/types';
 import { ConnectionInfoModal } from '../../shared/components/ConnectionInfoModal';
-import { sound } from '../../shared/audio/sound';
 import { Lobby as SharedLobby } from '../../shared/components/Lobby';
+import { useGameEngine } from '../../shared/engine/useGameEngine';
 import { ActionDock } from './components/ActionDock';
 import { AuctionModal } from './components/AuctionModal';
 import { GameBoard } from './components/GameBoard';
@@ -11,30 +12,30 @@ import { TileActionModal } from './components/TileActionModal';
 import { TileDetailModal } from './components/TileDetailModal';
 import { TradeModal } from './components/TradeModal';
 import { WinnerModal } from './components/WinnerModal';
-import type { Language } from './game/types';
-import { useMultiplayerGame } from './hooks/useMultiplayerGame';
+import { MonopolyEngine } from './game/MonopolyEngine';
+import type { PlayerConfig } from './game/types';
 import { TRANSLATIONS } from './i18n/translations';
 
-export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
-  const [language, setLanguage] = useState<Language>('de');
-  const [muted, setMuted] = useState(false);
+export function MonopolyApp({
+  language,
+  muted,
+  onToggleLanguage,
+  onToggleMute,
+  onBackToGames,
+}: GameComponentProps) {
   const [showProperties, setShowProperties] = useState(false);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
   const [showTrade, setShowTrade] = useState(false);
   const [showConnectionInfo, setShowConnectionInfo] = useState(false);
 
-  const mp = useMultiplayerGame();
+  const { engine, snapshot: mp } = useGameEngine(() => new MonopolyEngine());
   const state = mp.gameState;
 
-  const localSeatIndices = useMemo(() => {
-    if (!state) return [];
-    if (mp.isGuest) {
-      return mp.guestSeat !== null ? [mp.guestSeat] : [];
-    }
-    return state.players
-      .filter((p) => p.seatType === 'human-local')
-      .map((p) => p.index);
-  }, [state, mp.isGuest, mp.guestSeat]);
+  const localSeatIndices = useMemo(
+    () => engine.getLocalSeatIndices(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, mp.isGuest, mp.guestSeat]
+  );
 
   const canActCurrentTurn = useMemo(() => {
     if (!state) return false;
@@ -53,35 +54,23 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
 
       if (state.phase === 'WAIT_ROLL') {
         e.preventDefault();
-        mp.dispatchAction({ type: 'ROLL_DICE' });
+        engine.dispatchAction({ type: 'ROLL_DICE' });
       } else if (state.phase === 'CARD_MODAL') {
         e.preventDefault();
-        mp.dispatchAction({ type: 'ACK_CARD' });
+        engine.dispatchAction({ type: 'ACK_CARD' });
       } else if (state.phase === 'TURN_ACTION') {
         e.preventDefault();
-        mp.dispatchAction({ type: 'END_TURN' });
+        engine.dispatchAction({ type: 'END_TURN' });
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [state, canActCurrentTurn, showProperties, selectedTileIndex, showTrade, showConnectionInfo, mp]);
-
-  const toggleLanguage = () => setLanguage((prev) => (prev === 'de' ? 'en' : 'de'));
-
-  const toggleMute = () => {
-    setMuted((prev) => {
-      const next = !prev;
-      sound.muted = next;
-      return next;
-    });
-  };
+  }, [state, canActCurrentTurn, showProperties, selectedTileIndex, showTrade, showConnectionInfo, engine]);
 
   if (!state) {
     const t = TRANSLATIONS[language];
     return (
-      <>
-        {gameSwitcher}
-        <SharedLobby
+      <SharedLobby<PlayerConfig>
         gameId="monopoly"
         language={language}
         players={mp.players}
@@ -98,15 +87,16 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
         guestConnected={mp.guestConnected}
         guestConnecting={mp.guestConnecting}
         guestError={mp.guestError}
-        onChangePlayers={mp.setPlayers}
-        onChangeGuestName={mp.setGuestName}
-        onChangeGuestMajor={mp.setGuestMajor}
-        onChangeGuestEmoji={mp.setGuestEmoji}
-        onToggleLanguage={toggleLanguage}
-        onCloseRemoteSeat={mp.closeRemoteSeat}
-        onStartGame={mp.startGame}
-        onGuestJoinRoom={mp.joinRoomAsGuest}
-        onGuestLeave={mp.leaveGuestRoom}
+        onChangePlayers={engine.setPlayers}
+        onChangeGuestName={engine.setGuestName}
+        onChangeGuestMajor={engine.setGuestMajor}
+        onChangeGuestEmoji={engine.setGuestEmoji}
+        onToggleLanguage={onToggleLanguage}
+        onCloseRemoteSeat={engine.closeRemoteSeat}
+        onStartGame={engine.startGame}
+        onGuestJoinRoom={engine.joinRoomAsGuest}
+        onGuestLeave={engine.leaveGuestRoom}
+        onBackToGames={onBackToGames}
         titleOverride={t.title}
         subtitleOverride={t.subtitle}
         badgeOverride={`DHBW KARLSRUHE · ${language === 'de' ? 'ERZBERGERSTR. 121' : 'NORDSTADT CAMPUS'}`}
@@ -117,11 +107,10 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
             isGuest={mp.isGuest}
             settings={mp.settings}
             lobbySettings={mp.lobbySettings}
-            onChangeSettings={mp.setSettings}
+            onChangeSettings={engine.setSettings}
           />
         }
       />
-      </>
     );
   }
 
@@ -139,13 +128,13 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
           language={language}
           canAct={canActCurrentTurn}
           muted={muted}
-          onAction={mp.dispatchAction}
+          onAction={engine.dispatchAction}
           onOpenProperties={() => setShowProperties(true)}
           onOpenTrade={() => setShowTrade(true)}
           onOpenConnectionInfo={() => setShowConnectionInfo(true)}
-          onToggleMute={toggleMute}
-          onToggleLanguage={toggleLanguage}
-          onReturnToLobby={mp.returnToLobby}
+          onToggleMute={onToggleMute}
+          onToggleLanguage={onToggleLanguage}
+          onReturnToLobby={engine.returnToLobby}
         />
       </div>
 
@@ -153,14 +142,14 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
         state={state}
         language={language}
         canAct={canActCurrentTurn}
-        onAction={mp.dispatchAction}
+        onAction={engine.dispatchAction}
       />
 
       <AuctionModal
         state={state}
         language={language}
         localSeatIndices={localSeatIndices}
-        onAction={mp.dispatchAction}
+        onAction={engine.dispatchAction}
       />
 
       {selectedTileIndex !== null && (
@@ -169,7 +158,7 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
           tileIndex={selectedTileIndex}
           language={language}
           canAct={canActCurrentTurn}
-          onAction={mp.dispatchAction}
+          onAction={engine.dispatchAction}
           onClose={() => setSelectedTileIndex(null)}
         />
       )}
@@ -179,7 +168,7 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
           state={state}
           language={language}
           canAct={canActCurrentTurn}
-          onAction={mp.dispatchAction}
+          onAction={engine.dispatchAction}
           onClose={() => setShowProperties(false)}
         />
       )}
@@ -190,7 +179,7 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
           language={language}
           localSeatIndices={localSeatIndices}
           isOpen={showTrade}
-          onAction={mp.dispatchAction}
+          onAction={engine.dispatchAction}
           onClose={() => setShowTrade(false)}
         />
       )}
@@ -211,10 +200,10 @@ export function App({ gameSwitcher }: { gameSwitcher?: ReactNode } = {}) {
       <WinnerModal
         state={state}
         language={language}
-        onReturnToLobby={mp.returnToLobby}
+        onReturnToLobby={engine.returnToLobby}
       />
     </div>
   );
 }
 
-export default App;
+export default MonopolyApp;

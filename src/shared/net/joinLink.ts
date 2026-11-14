@@ -1,4 +1,4 @@
-export type GameId = 'medn' | 'monopoly';
+export type GameId = string;
 
 export function buildJoinUrl(roomCode: string, gameId: GameId = 'medn'): string {
   if (typeof window === 'undefined') return '';
@@ -14,10 +14,13 @@ export function extractRoomCodeFromHash(): string {
   return params.get('room') ?? '';
 }
 
-export function extractGameFromHash(): GameId {
-  if (typeof window === 'undefined') return 'medn';
+export function extractGameFromHash(): GameId | null {
+  if (typeof window === 'undefined') return null;
   const raw = window.location.hash.replace(/^#/, '');
-  if (!raw) return 'medn';
+  if (!raw) return null;
   const params = new URLSearchParams(raw);
-  return params.get('game') === 'monopoly' ? 'monopoly' : 'medn';
+  const game = params.get('game');
+  if (game) return game;
+  if (params.get('room')) return 'medn';
+  return null;
 }

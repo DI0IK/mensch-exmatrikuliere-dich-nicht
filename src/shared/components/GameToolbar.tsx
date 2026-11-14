@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button, Card } from '../ui';
 
 interface GameToolbarProps {
   language: 'de' | 'en';
@@ -29,10 +30,9 @@ export const GameToolbar: React.FC<GameToolbarProps> = ({
       : 'Mute';
 
   return (
-    <div
-      className="paper-card"
+    <Card
+      padding="8px 12px"
       style={{
-        padding: '8px 12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -41,44 +41,40 @@ export const GameToolbar: React.FC<GameToolbarProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <button
-          type="button"
-          className="tactile-btn"
+        <Button
+          size="sm"
           onClick={onOpenConnectionInfo}
           aria-label={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
           title={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
           style={{ padding: '5px 9px', fontSize: '0.84rem' }}
         >
           ⓘ
-        </button>
-        <button
-          type="button"
-          className="tactile-btn"
+        </Button>
+        <Button
+          size="sm"
           onClick={onToggleMute}
           aria-label={muteTitle}
           title={muteTitle}
           style={{ padding: '5px 9px', fontSize: '0.84rem' }}
         >
           {muted ? '🔇' : '🔊'}
-        </button>
-        <button
-          type="button"
-          className="tactile-btn"
+        </Button>
+        <Button
+          size="sm"
           onClick={onToggleLanguage}
           style={{ padding: '5px 9px', fontSize: '0.78rem' }}
         >
           {language === 'de' ? 'DE' : 'EN'}
-        </button>
+        </Button>
       </div>
 
-      <button
-        type="button"
-        className="tactile-btn"
+      <Button
+        size="sm"
         onClick={onReturnToLobby}
         style={{ padding: '5px 10px', fontSize: '0.78rem' }}
       >
         ← {backLabel ?? defaultBackLabel}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 };

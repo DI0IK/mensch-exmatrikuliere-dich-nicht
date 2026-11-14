@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BOARD_TILES } from '../game/boardData';
 import { isPropertyTradeable, validateTradeOffer } from '../game/trading';
 import type { GameAction, GameState, Language, TradeOffer } from '../game/types';
+import { Button, Dropdown } from '../../../shared/ui';
 
 interface TradeModalProps {
   state: GameState;
@@ -100,24 +101,22 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              type="button"
-              className="tactile-btn success"
+            <Button
+              variant="success"
               disabled={!canRespond}
               onClick={() => onAction({ type: 'RESPOND_TRADE', accept: true })}
               style={{ flex: 1 }}
             >
               {language === 'de' ? 'Annehmen' : 'Accept'}
-            </button>
-            <button
-              type="button"
-              className="tactile-btn primary"
+            </Button>
+            <Button
+              variant="primary"
               disabled={!canRespond}
               onClick={() => onAction({ type: 'RESPOND_TRADE', accept: false })}
               style={{ flex: 1 }}
             >
               {language === 'de' ? 'Ablehnen' : 'Decline'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -181,28 +180,27 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           <strong style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem' }}>
             🤝 {language === 'de' ? 'Handel vorschlagen' : 'Propose Trade'}
           </strong>
-          <button type="button" className="tactile-btn" onClick={onClose} style={{ padding: '4px 10px' }}>
+          <Button size="sm" onClick={onClose} style={{ padding: '4px 10px' }}>
             ✕
-          </button>
+          </Button>
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem' }}>
           <span>{language === 'de' ? 'Handelspartner:' : 'Partner:'}</span>
-          <select
-            value={effectiveToIdx}
-            onChange={(e) => {
-              setToIdx(Number(e.target.value));
+          <Dropdown
+            value={String(effectiveToIdx)}
+            onChange={(val) => {
+              setToIdx(Number(val));
               setRequestProps([]);
               setRequestJailCards(0);
             }}
-            style={{ padding: '5px 8px', borderRadius: '6px', border: '1.5px solid #bfa988' }}
           >
             {candidates.map((c) => (
-              <option key={c.index} value={c.index}>
+              <option key={c.index} value={String(c.index)}>
                 {c.emoji ?? ''} {c.name} ({c.cash} €)
               </option>
             ))}
-          </select>
+          </Dropdown>
         </label>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -281,9 +279,8 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          className="tactile-btn primary"
+        <Button
+          variant="primary"
           disabled={!valid}
           onClick={() => {
             onAction({ type: 'PROPOSE_TRADE', offer: draftOffer });
@@ -291,7 +288,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           }}
         >
           {language === 'de' ? 'Angebot senden' : 'Send Offer'}
-        </button>
+        </Button>
       </div>
     </div>
   );

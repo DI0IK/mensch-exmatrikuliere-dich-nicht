@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GameState, Language, PlayerColor } from '../game/types';
 import { COLOR_LABELS, TRANSLATIONS } from '../i18n/translations';
+import { Card } from '../../../shared/ui';
 
 interface TurnBannerProps {
   state: GameState;
@@ -40,10 +41,9 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
   } else if (state.phase === 'GAME_OVER') phaseLabel = t.winnerTitle;
 
   return (
-    <header
-      className="paper-card"
+    <Card
+      padding="10px 14px"
       style={{
-        padding: '10px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
@@ -195,6 +195,6 @@ export const TurnBanner: React.FC<TurnBannerProps> = ({
           );
         })}
       </div>
-    </header>
+    </Card>
   );
 };

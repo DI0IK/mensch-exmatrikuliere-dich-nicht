@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getIceServers } from '../net/iceConfig';
 import type { IceTransportKind } from '../net/lobbyRoom';
+import { Button, Modal } from '../ui';
 
 export interface ConnectionSeatPlayer {
   color: string;
@@ -33,47 +34,14 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 60,
-        background: 'rgba(28, 22, 16, 0.45)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      ariaLabel={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
+      title={language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
+      showCloseButton
+      maxWidth="380px"
     >
-      <div
-        className="paper-card"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          padding: '18px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <strong style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem' }}>
-            {language === 'de' ? 'Verbindungsdetails' : 'Connection Details'}
-          </strong>
-          <button
-            type="button"
-            className="tactile-btn"
-            onClick={onClose}
-            style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-          >
-            ✕
-          </button>
-        </div>
 
         <div
           style={{
@@ -116,9 +84,8 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
                 >
                   {hostLobbyCode}
                 </code>
-                <button
-                  type="button"
-                  className="tactile-btn"
+                <Button
+                  size="sm"
                   aria-label={
                     copiedCode
                       ? language === 'de'
@@ -145,7 +112,7 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
                   }}
                 >
                   {copiedCode ? '✓' : '⧉'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -237,7 +204,6 @@ export const ConnectionInfoModal: React.FC<ConnectionInfoModalProps> = ({
             );
           })}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

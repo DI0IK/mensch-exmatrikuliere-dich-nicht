@@ -1,45 +1,8 @@
-import { useState } from 'react';
-import { MednApp } from './games/medn/MednApp';
-import MonopolyApp from './games/monopoly/MonopolyApp';
-import { extractGameFromHash, type GameId } from './shared/net/joinLink';
+import { GAME_COLLECTION } from './games/registry';
+import { GameCollection } from './shared/collection/GameCollection';
 
 export function App() {
-  const [activeGame, setActiveGame] = useState<GameId>(() => extractGameFromHash());
-
-  const gameSwitcher = (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-        gap: '8px',
-        padding: '8px 12px 0',
-        flexWrap: 'wrap',
-      }}
-    >
-      <button
-        type="button"
-        className={`tactile-btn ${activeGame === 'medn' ? 'primary' : ''}`}
-        onClick={() => setActiveGame('medn')}
-        style={{ padding: '6px 14px', fontSize: '0.82rem' }}
-      >
-        🎲 Mensch exmatrikuliere dich nicht
-      </button>
-      <button
-        type="button"
-        className={`tactile-btn ${activeGame === 'monopoly' ? 'primary' : ''}`}
-        onClick={() => setActiveGame('monopoly')}
-        style={{ padding: '6px 14px', fontSize: '0.82rem' }}
-      >
-        🏛️ DHBW Karlsruhe Monopoly
-      </button>
-    </div>
-  );
-
-  if (activeGame === 'monopoly') {
-    return <MonopolyApp gameSwitcher={gameSwitcher} />;
-  }
-
-  return <MednApp gameSwitcher={gameSwitcher} />;
+  return <GameCollection games={GAME_COLLECTION} />;
 }
 
 export default App;

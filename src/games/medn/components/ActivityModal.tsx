@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ActivityType, GameState, Language, PlayerColor } from '../game/types';
+import { Button, Modal, StampBadge } from '../../../shared/ui';
 
 interface ActivityModalProps {
   state: GameState;
@@ -98,36 +99,22 @@ export const ActivityModal: React.FC<ActivityModalProps> = ({
       : meta.badEn;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(35, 29, 23, 0.56)',
-        backdropFilter: 'blur(3px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        zIndex: 55,
+    <Modal
+      open
+      maxWidth="460px"
+      zIndex={55}
+      closeOnBackdrop={false}
+      cardStyle={{
+        padding: '22px',
+        gap: '14px',
+        textAlign: 'center',
       }}
     >
-      <div
-        className="paper-card"
-        style={{
-          width: '100%',
-          maxWidth: '460px',
-          padding: '22px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px',
-          textAlign: 'center',
-        }}
-      >
         <div style={{ fontSize: '2.4rem', lineHeight: 1 }}>{meta.icon}</div>
 
         <div>
-          <div
-            className={`stamp-badge ${isGood ? 'stamp-immatrikuliert' : 'stamp-exmatrikuliert'}`}
+          <StampBadge
+            variant={isGood ? 'immatrikuliert' : 'exmatrikuliert'}
             style={{ fontSize: '0.78rem', marginBottom: '8px' }}
           >
             {isGood
@@ -137,7 +124,7 @@ export const ActivityModal: React.FC<ActivityModalProps> = ({
               : language === 'de'
                 ? 'HARDCORE · PECH GEHABT'
                 : 'HARDCORE · UNLUCKY'}
-          </div>
+          </StampBadge>
           <h2
             style={{
               fontFamily: 'var(--font-display)',
@@ -189,13 +176,13 @@ export const ActivityModal: React.FC<ActivityModalProps> = ({
         )}
 
         {canAct ? (
-          <button
-            className="tactile-btn primary"
+          <Button
+            variant="primary"
             onClick={onAcknowledge}
             style={{ fontSize: '1rem', padding: '12px' }}
           >
             {language === 'de' ? 'Weiter' : 'Continue'}
-          </button>
+          </Button>
         ) : (
           <div style={{ fontSize: '0.88rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
             {player.seatType === 'bot'
@@ -207,7 +194,6 @@ export const ActivityModal: React.FC<ActivityModalProps> = ({
                 : 'Waiting for player…'}
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

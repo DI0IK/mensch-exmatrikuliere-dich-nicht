@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button, Modal, StampBadge } from '../../../shared/ui';
 import { getPlayerNetWorth } from '../game/helpers';
 import type { GameState, Language } from '../game/types';
 import { TRANSLATIONS } from '../i18n/translations';
@@ -18,57 +19,41 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({ state, language, onRet
   const netWorth = getPlayerNetWorth(state, winner.index);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 65,
-        background: 'rgba(28, 22, 16, 0.55)',
-        display: 'flex',
+    <Modal
+      open
+      maxWidth="420px"
+      zIndex={65}
+      closeOnBackdrop={false}
+      cardStyle={{
+        padding: '24px',
+        textAlign: 'center',
+        gap: '14px',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
       }}
     >
+      <StampBadge variant="immatrikuliert" animated style={{ fontSize: '0.84rem' }}>
+        🎓 {t.winnerTitle}
+      </StampBadge>
+      <div style={{ fontSize: '3rem', lineHeight: 1 }}>{winner.emoji ?? '🎓'}</div>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.7rem', color: COLOR_HEX[winner.color] }}>
+        {winner.name}
+      </h2>
+      <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: '0.92rem' }}>{t.winnerSubtitle}</p>
       <div
-        className="paper-card"
         style={{
-          width: '100%',
-          maxWidth: '420px',
-          padding: '24px',
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px',
-          alignItems: 'center',
+          padding: '10px 16px',
+          borderRadius: '10px',
+          background: '#fbf5e9',
+          border: '1.5px solid #d6c3a3',
+          fontFamily: 'var(--font-stamp)',
+          fontWeight: 700,
         }}
       >
-        <div className="stamp-badge stamp-immatrikuliert animate-stamp" style={{ fontSize: '0.84rem' }}>
-          🎓 {t.winnerTitle}
-        </div>
-        <div style={{ fontSize: '3rem', lineHeight: 1 }}>{winner.emoji ?? '🎓'}</div>
-        <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.7rem', color: COLOR_HEX[winner.color] }}>
-          {winner.name}
-        </h2>
-        <p style={{ margin: 0, color: 'var(--ink-muted)', fontSize: '0.92rem' }}>{t.winnerSubtitle}</p>
-        <div
-          style={{
-            padding: '10px 16px',
-            borderRadius: '10px',
-            background: '#fbf5e9',
-            border: '1.5px solid #d6c3a3',
-            fontFamily: 'var(--font-stamp)',
-            fontWeight: 700,
-          }}
-        >
-          {t.netWorth}: {netWorth} €
-        </div>
-        <button type="button" className="tactile-btn primary" onClick={onReturnToLobby} style={{ width: '100%' }}>
-          {t.playAgain}
-        </button>
+        {t.netWorth}: {netWorth} €
       </div>
-    </div>
+      <Button variant="primary" onClick={onReturnToLobby} style={{ width: '100%' }}>
+        {t.playAgain}
+      </Button>
+    </Modal>
   );
 };
