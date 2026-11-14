@@ -348,15 +348,28 @@ export abstract class BaseGameEngine<
 
   // ---- Host / Guest PeerJS Networking ----
 
+  public getOpenRemoteSeats = (): number[] => {
+    const remoteSeats = this.players
+      .map((p, idx) => (idx > 0 && p.active && p.seatType === 'human-remote' ? idx : -1))
+      .filter((idx) => idx >= 0);
+
+    if (this.gameState) {
+      return remoteSeats;
+    }
+
+    const botSeats = this.players
+      .map((p, idx) => (idx > 0 && p.active && p.seatType === 'bot' ? idx : -1))
+      .filter((idx) => idx >= 0);
+
+    return [...remoteSeats, ...botSeats];
+  };
+
   private initHostRoom(): void {
     this.hostRoom?.closeAll();
     this.hostLobbyError = null;
     const room = new LobbyHostRoom<BaseNetMessage<TState, TAction, TSettings, TPlayer>>({
       gameId: this.gameId,
-      getOpenRemoteSeats: () =>
-        this.players
-          .map((p, idx) => (p.active && p.seatType === 'human-remote' ? idx : -1))
-          .filter((idx) => idx >= 0),
+      getOpenRemoteSeats: this.getOpenRemoteSeats,
       onRoomReady: (code) => {
         if (this.destroyed) return;
         this.hostLobbyCode = code;
@@ -371,11 +384,22 @@ export abstract class BaseGameEngine<
       onStatusChange: (seatIndex, connected) => {
         if (this.destroyed) return;
         if (connected) {
+          if (this.players[seatIndex] && this.players[seatIndex].seatType !== 'human-remote') {
+            this.players = this.players.map((p, idx) =>
+              idx === seatIndex
+                ? {
+                    ...p,
+                    seatType: 'human-remote' as const,
+                    name: DEFAULT_NAMES['human-remote'][seatIndex] ?? p.name,
+                  }
+                : p
+            );
+          }
           if (!this.connectedSeats.includes(seatIndex)) {
             this.connectedSeats = [...this.connectedSeats, seatIndex];
           }
           this.disconnectedSeats = this.disconnectedSeats.filter((s) => s !== seatIndex);
-          room.sendToSeat(seatIndex, {
+          room.broadcast({
             kind: 'LOBBY_SYNC',
             players: this.players,
             settings: this.settings,
@@ -391,6 +415,21 @@ export abstract class BaseGameEngine<
             if (!this.disconnectedSeats.includes(seatIndex)) {
               this.disconnectedSeats = [...this.disconnectedSeats, seatIndex];
             }
+          } else if (this.players[seatIndex]?.seatType === 'human-remote') {
+            this.players = this.players.map((p, idx) =>
+              idx === seatIndex
+                ? {
+                    ...p,
+                    seatType: 'bot' as const,
+                    name: DEFAULT_NAMES.bot[seatIndex] ?? p.name,
+                  }
+                : p
+            );
+            room.broadcast({
+              kind: 'LOBBY_SYNC',
+              players: this.players,
+              settings: this.settings,
+            });
           }
         }
         this.emit();
